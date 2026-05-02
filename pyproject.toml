@@ -1,0 +1,19 @@
+[project]
+name = "mcp-server"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14.3"
+dependencies = [
+    "ddgs>=9.13.0",
+    "fastapi>=0.135.3",
+    "httpx>=0.28.1",
+    "mcp[cli]>=1.27.0",
+    "trafilatura>=2.0.0",
+    "uvicorn>=0.44.0",
+]
+
+[tool.uv.workspace]
+members = [
+    "resources/test",
+]

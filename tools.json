@@ -1,0 +1,120 @@
+[
+    {
+        "name": "today",
+        "description": "Get todays date, and time",
+        "inputSchema": {"type": "object", "properties": {}}
+    },
+    {
+        "name": "add",
+        "description": "Adds two numbers together",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"a": {"type": "number"}, "b": {"type": "number"}},
+            "required": ["a", "b"]
+        }
+    },
+    {
+        "name": "web_search",
+        "description": "Search the live web for current information, news, or facts.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"query": {"type": "string", "description": "The search query"}},
+            "required": ["query"]
+        }
+    },
+    {
+        "name": "fetch_content",
+        "description": "Scrape a URL, extract main content, and return a clean text summary.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"url": {"type": "string", "description": "The URL to scrape"}},
+            "required": ["url"]
+        }
+    },
+    {
+        "name": "list_files",
+        "description": "List files and directories in a specified folder.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"path": {"type": "string", "description": "Absolute or relative path to list"}},
+            "required": ["path"]
+        }
+    },
+    {
+        "name": "read_file",
+        "description": "Read a file with AI-friendly line-based windowing. Returns formatted output with navigation hints.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Path to the file (relative to resources/)"},
+                "line_start": {"type": "integer", "default": 1, "description": "Starting line number (1-indexed). Use negative values to count from end."},
+                "line_count": {"type": "integer", "default": 50, "description": "Number of lines to read"}
+            },
+            "required": ["path"]
+        }
+    },
+    {
+        "name": "write_file",
+        "description": "Write text content to a file. Creates parent directories if needed.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Path where file will be written"},
+                "content": {"type": "string", "description": "Text content to write"}
+            },
+            "required": ["path", "content"]
+        }
+    },
+    {
+        "name": "append_to_file",
+        "description": "Append text content to the end of an existing file without overwriting.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Path to the file"},
+                "content": {"type": "string", "description": "Text to append to the file"}
+            },
+            "required": ["path", "content"]
+        }
+    },
+    {
+        "name": "replace_in_file",
+        "description": "Find and replace specific text in a file. If multiple occurrences exist, replaces all.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Path to the file"},
+                "old_text": {"type": "string", "description": "Text to find in the file"},
+                "new_text": {"type": "string", "description": "Replacement text"}
+            },
+            "required": ["path", "old_text", "new_text"]
+        }
+    },
+    {
+        "name": "insert_after_marker",
+        "description": "Insert text after a specific marker line in a file. Creates the file if it doesn't exist.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Path to the file"},
+                "marker": {"type": "string", "description": "Line content to search for"},
+                "content": {"type": "string", "description": "Text to insert after the marker"}
+            },
+            "required": ["path", "marker", "content"]
+        }
+    },
+    {
+        "name": "run_command",
+        "description": "Execute a shell command within the 'resources/' sandbox directory. Policy blocks dangerous operations (rm -rf, sudo, apt, raw sh). Respects timeout and max_output limits.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "command": {"type": "string", "description": "Shell command to execute"},
+                "cwd": {"type": "string", "default": ".", "description": "Working directory (relative to sandbox root)"},
+                "timeout": {"type": "integer", "default": 15, "description": "Max seconds to wait"},
+                "max_output": {"type": "integer", "default": 5000, "description": "Max characters of stdout/stderr to return"}
+            },
+            "required": ["command"]
+        }
+    }
+]
