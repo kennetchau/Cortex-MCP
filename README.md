@@ -55,17 +55,14 @@ The server will start on `http://0.0.0.0:8000`.
 mcp_server/
 ├── main.py              # FastAPI application entry point
 ├── tools.json           # Tool definitions (JSON schema)
-├── .mcp_servers/        # MCP tool implementations
-│   ├── md_to_pdf.py     # Markdown to PDF conversion
+├── tools/               # MCP tool implementations
 │   ├── add.py           # Math operations
 │   ├── today.py         # Date/time
 │   ├── web_search.py    # Web search
 │   ├── fetch_content.py # URL scraping
 │   ├── files.py         # All file operations
-│   └── run_command.py   # Shell command execution
-└── resources/           # Working directory for file operations
-    ├── README.md        # This documentation
-    └── ...              # User workspace files
+│   ├── run_command.py   # Shell command execution
+│   └── md_to_pdf.py     # Markdown to PDF conversion
 ```
 
 ## Sandbox Configuration
