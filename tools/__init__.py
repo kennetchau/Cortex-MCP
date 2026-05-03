@@ -20,6 +20,7 @@ from .sqlite_store import (
     handle_query_context,
     handle_clear_context,
     handle_list_projects,
+    handle_add_context_alias,
 )
 
 __all__ = [
@@ -42,4 +43,5 @@ __all__ = [
     "handle_query_context",
     "handle_clear_context",
     "handle_list_projects",
+    "handle_add_context_alias",
 ]
