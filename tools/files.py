@@ -2,11 +2,13 @@
 File operations module for MCP server.
 
 Provides tools for listing, reading, writing, appending, replacing,
-and inserting text in files within the sandboxed resources directory.
+and inserting text in files within the sandboxed directory.
 """
 
 import pathlib
 import os
+
+from config import BASE_DIR
 
 
 # Directories/files to skip when building tree view
@@ -69,11 +71,11 @@ async def handle_list_files(request_id: str, args: dict, _tool_response, **kwarg
     Returns:
         Formatted response with file/directory listing or tree view
     """
-    base = pathlib.Path("resources")
+    base = BASE_DIR
     target = (base / args.get("path", "")).resolve()
 
     if not str(target).startswith(str(base.resolve())):
-        return _tool_response(request_id, f"Error: Path '{args.get('path')}' escapes 'resources' directory.")
+        return _tool_response(request_id, f"Error: Path '{args.get('path')}' escapes the sandbox directory.")
 
     if not target.exists():
         return _tool_response(request_id, f"Error: Path '{target}' does not exist.")
@@ -109,13 +111,13 @@ async def handle_read_file(request_id: str, args: dict, _tool_response, **kwargs
         Formatted file content with line numbers and navigation hints
     """
     # Strict sandbox enforcement using realpath
-    base = pathlib.Path("resources").resolve()
+    base = BASE_DIR.resolve()
     target = (base / args.get("path", "")).resolve()
 
     # Verify the resolved path is strictly within sandbox
     if not str(target).startswith(str(base) + "/") and target != base:
         return _tool_response(request_id,
-            f"Error: Path '{args.get('path')}' escapes the 'resources' directory.")
+            f"Error: Path '{args.get('path')}' escapes the sandbox directory.")
 
     if not target.is_file():
         return _tool_response(request_id,
@@ -184,11 +186,11 @@ async def handle_write_file(request_id: str, args: dict, _tool_response, **kwarg
     Returns:
         Confirmation message with character count
     """
-    base = pathlib.Path("resources")
+    base = BASE_DIR
     target = (base / args.get("path", "")).resolve()
 
     if not str(target).startswith(str(base.resolve())):
-        return _tool_response(request_id, f"Error: Path '{args.get('path')}' escapes 'resources' directory.")
+        return _tool_response(request_id, f"Error: Path '{args.get('path')}' escapes the sandbox directory.")
 
     content = args.get("content", "")
     try:
@@ -211,11 +213,11 @@ async def handle_append_to_file(request_id: str, args: dict, _tool_response, **k
     Returns:
         Confirmation message with character count
     """
-    base = pathlib.Path("resources")
+    base = BASE_DIR
     target = (base / args.get("path", "")).resolve()
 
     if not str(target).startswith(str(base.resolve())):
-        return _tool_response(request_id, f"Error: Path '{args.get('path')}' escapes 'resources' directory.")
+        return _tool_response(request_id, f"Error: Path '{args.get('path')}' escapes the sandbox directory.")
 
     content = args.get("content", "")
     try:
@@ -240,11 +242,11 @@ async def handle_replace_in_file(request_id: str, args: dict, _tool_response, **
     Returns:
         Confirmation message with replacement count
     """
-    base = pathlib.Path("resources")
+    base = BASE_DIR
     target = (base / args.get("path", "")).resolve()
 
     if not str(target).startswith(str(base.resolve())):
-        return _tool_response(request_id, f"Error: Path '{args.get('path')}' escapes 'resources' directory.")
+        return _tool_response(request_id, f"Error: Path '{args.get('path')}' escapes the sandbox directory.")
 
     old_text = args.get("old_text", "")
     new_text = args.get("new_text", "")
@@ -277,11 +279,11 @@ async def handle_insert_after_marker(request_id: str, args: dict, _tool_response
     Returns:
         Confirmation message
     """
-    base = pathlib.Path("resources")
+    base = BASE_DIR
     target = (base / args.get("path", "")).resolve()
 
     if not str(target).startswith(str(base.resolve())):
-        return _tool_response(request_id, f"Error: Path '{args.get('path')}' escapes 'resources' directory.")
+        return _tool_response(request_id, f"Error: Path '{args.get('path')}' escapes the sandbox directory.")
 
     marker = args.get("marker", "")
     content = args.get("content", "")
@@ -312,7 +314,7 @@ async def handle_insert_after_marker(request_id: str, args: dict, _tool_response
         return _tool_response(request_id, f"Error inserting text: {str(e)}")
 
 async def handle_search_files(request_id: str, args: dict, _tool_response, **kwargs) -> dict:
-    """Search for text patterns within files in the resources directory.
+    """Search for text patterns within files in the sandbox directory.
     
     Args:
         request_id: Unique identifier for the MCP request
@@ -329,12 +331,11 @@ async def handle_search_files(request_id: str, args: dict, _tool_response, **kwa
     query = args.get("query", "")
     if not query:
         return _tool_response(request_id, "Error: 'query' parameter is required.")
-    
-    base = pathlib.Path("resources").resolve()
+    base = BASE_DIR.resolve()
     search_path = (base / args.get("path", "")).resolve()
     
     if not str(search_path).startswith(str(base)):
-        return _tool_response(request_id, f"Error: Path '{args.get('path')}' escapes 'resources' directory.")
+        return _tool_response(request_id, f"Error: Path '{args.get('path')}' escapes the sandbox directory.")
     
     if not search_path.exists():
         return _tool_response(request_id, f"Error: Path '{search_path}' does not exist.")
@@ -414,7 +415,7 @@ async def handle_search_files(request_id: str, args: dict, _tool_response, **kwa
     return _tool_response(request_id, result)
 
 async def handle_delete_file(request_id: str, args: dict, _tool_response, **kwargs) -> dict:
-    """Delete a file from the resources directory.
+    """Delete a file from the sandbox directory.
     
     Args:
         request_id: Unique identifier for the MCP request
@@ -425,11 +426,11 @@ async def handle_delete_file(request_id: str, args: dict, _tool_response, **kwar
     Returns:
         Confirmation message or error
     """
-    base = pathlib.Path("resources")
+    base = BASE_DIR
     target = (base / args.get("path", "")).resolve()
 
     if not str(target).startswith(str(base.resolve())):
-        return _tool_response(request_id, f"Error: Path '{args.get('path')}' escapes 'resources' directory.")
+        return _tool_response(request_id, f"Error: Path '{args.get('path')}' escapes the sandbox directory.")
 
     if not target.exists():
         return _tool_response(request_id, f"File not found: '{target.name}'.")
@@ -445,7 +446,7 @@ async def handle_delete_file(request_id: str, args: dict, _tool_response, **kwar
 
 
 async def handle_remove_directory(request_id: str, args: dict, _tool_response, **kwargs) -> dict:
-    """Remove a directory from the resources directory.
+    """Remove a directory from the sandbox directory.
     
     Args:
         request_id: Unique identifier for the MCP request
@@ -457,12 +458,11 @@ async def handle_remove_directory(request_id: str, args: dict, _tool_response, *
         Confirmation message or error
     """
     import shutil
-    
-    base = pathlib.Path("resources")
+    base = BASE_DIR
     target = (base / args.get("path", "")).resolve()
 
     if not str(target).startswith(str(base.resolve())):
-        return _tool_response(request_id, f"Error: Path '{args.get('path')}' escapes 'resources' directory.")
+        return _tool_response(request_id, f"Error: Path '{args.get('path')}' escapes the sandbox directory.")
 
     if not target.exists():
         return _tool_response(request_id, f"Directory not found: '{target.name}'.")

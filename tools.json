@@ -49,7 +49,7 @@
         "inputSchema": {
             "type": "object",
             "properties": {
-                "path": {"type": "string", "description": "Path to the file (relative to resources/)"},
+                "path": {"type": "string", "description": "Path to the file (relative to the sandbox base)"},
                 "line_start": {"type": "integer", "default": 1, "description": "Starting line number (1-indexed). Use negative values to count from end."},
                 "line_count": {"type": "integer", "default": 50, "description": "Number of lines to read"}
             },
@@ -108,12 +108,12 @@
     },
     {
         "name": "search_files",
-        "description": "Search for text patterns within files in the resources directory.",
+        "description": "Search for text patterns within files in the sandbox directory.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "query": {"type": "string", "description": "Text or regex pattern to search for"},
-                "path": {"type": "string", "default": ".", "description": "Directory path to search in (relative to resources/)"},
+                "path": {"type": "string", "default": ".", "description": "Directory path to search in (relative to the sandbox base)"},
                 "pattern_type": {"type": "string", "default": "exact", "enum": ["exact", "regex"], "description": "Whether to treat query as exact text or regex pattern"},
                 "max_results": {"type": "integer", "default": 20, "description": "Maximum number of results to return"}
             },
@@ -122,7 +122,7 @@
     },
     {
         "name": "run_command",
-        "description": "Execute a shell command within the 'resources/' sandbox directory. Policy blocks dangerous operations (rm -rf, sudo, apt, raw sh). Respects timeout and max_output limits.",
+        "description": "Execute a shell command within the sandbox directory. Policy blocks dangerous operations (rm -rf, sudo, apt, raw sh). Respects timeout and max_output limits.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -140,31 +140,31 @@
         "inputSchema": {
             "type": "object",
             "properties": {
-                "source_path": {"type": "string", "description": "Path to the source Markdown file (relative to resources/)"},
+                "source_path": {"type": "string", "description": "Path to the source Markdown file (relative to the sandbox base)"},
                 "output_path": {"type": "string", "description": "Path for the output PDF (defaults to same name with .pdf extension)"},
-                "css_path": {"type": "string", "description": "Optional path to a custom CSS stylesheet (relative to resources/)"}
+                "css_path": {"type": "string", "description": "Optional path to a custom CSS stylesheet (relative to the sandbox base)"}
             },
             "required": ["source_path"]
         }
     },
     {
         "name": "delete_file",
-        "description": "Delete a file from the resources directory.",
+        "description": "Delete a file from the sandbox directory.",
         "inputSchema": {
             "type": "object",
             "properties": {
-                "path": {"type": "string", "description": "Path to the file to delete (relative to resources/)"}
+                "path": {"type": "string", "description": "Path to the file to delete (relative to the sandbox base)"}
             },
             "required": ["path"]
         }
     },
     {
         "name": "remove_directory",
-        "description": "Remove a directory from the resources directory. Use recursive=true for non-empty directories.",
+        "description": "Remove a directory from the sandbox directory. Use recursive=true for non-empty directories.",
         "inputSchema": {
             "type": "object",
             "properties": {
-                "path": {"type": "string", "description": "Path to the directory to remove (relative to resources/)"},
+                "path": {"type": "string", "description": "Path to the directory to remove (relative to the sandbox base)"},
                 "recursive": {"type": "boolean", "default": false, "description": "If true, removes directory and all contents recursively"}
             },
             "required": ["path"]

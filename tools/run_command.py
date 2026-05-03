@@ -1,21 +1,23 @@
 import asyncio
 from pathlib import Path
 
+from config import BASE_DIR
+
 
 async def handle_run_command(request_id: str, args: dict, _tool_response, **kwargs) -> dict:
-    """Execute a shell command within the 'resources/' sandbox directory."""
+    """Execute a shell command within the sandbox directory."""
     command = args.get("command", "")
     cwd = args.get("cwd", ".")
     timeout = int(args.get("timeout", 15))
     max_output = int(args.get("max_output", 5000))
 
-    # Consistent sandbox base like other tools
-    base = Path("resources").resolve()
+   # Consistent sandbox base like other tools
+    base = BASE_DIR.resolve()
     target_cwd = (base / cwd).resolve()
 
     # Strict containment check
     if not str(target_cwd).startswith(str(base)):
-        return _tool_response(request_id, f"Error: CWD '{cwd}' escapes 'resources' directory.")
+        return _tool_response(request_id, f"Error: CWD '{cwd}' escapes the sandbox directory.")
 
     # Strict isolation bubblewrap sandbox
     bwrap_cmd = [
