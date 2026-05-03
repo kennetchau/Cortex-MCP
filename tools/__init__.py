@@ -12,6 +12,7 @@ from .files import (
     handle_insert_after_marker,
 )
 from .run_command import handle_run_command
+from .md_to_pdf import handle_md_to_pdf
 
 __all__ = [
     "handle_today",
@@ -25,4 +26,5 @@ __all__ = [
     "handle_replace_in_file",
     "handle_insert_after_marker",
     "handle_run_command",
+    "handle_md_to_pdf",
 ]

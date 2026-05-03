@@ -22,6 +22,7 @@ from tools import (
     handle_replace_in_file,
     handle_insert_after_marker,
     handle_run_command,
+    handle_md_to_pdf,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -63,6 +64,7 @@ TOOL_HANDLERS = {
     "replace_in_file": handle_replace_in_file,
     "insert_after_marker": handle_insert_after_marker,
     "run_command": handle_run_command,
+    "md_to_pdf": handle_md_to_pdf,
 }
 
 # Async scraper with timeout & headers (used by fetch_content)
