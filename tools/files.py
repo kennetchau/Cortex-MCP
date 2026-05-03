@@ -147,9 +147,7 @@ async def handle_read_file(request_id: str, args: dict, _tool_response, **kwargs
         result += f"Lines {line_start}-{end_line}:\n\n"
 
         for i, line in enumerate(window_lines, start=line_start):
-            # Truncate very long lines for readability
-            display_line = line[:200] + ("..." if len(line) > 200 else "")
-            result += f"{i:6d} │ {display_line}\n"
+            result += f"{i:6d} │ {line}\n"
 
         result += "\n" + "─" * 50 + "\n"
 
