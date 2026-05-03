@@ -312,3 +312,176 @@ async def handle_insert_after_marker(request_id: str, args: dict, _tool_response
         return _tool_response(request_id, f"Successfully inserted text after marker in '{target.name}'.")
     except Exception as e:
         return _tool_response(request_id, f"Error inserting text: {str(e)}")
+
+async def handle_search_files(request_id: str, args: dict, _tool_response, **kwargs) -> dict:
+    """Search for text patterns within files in the resources directory.
+    
+    Args:
+        request_id: Unique identifier for the MCP request
+        args: Dictionary containing 'query', optional 'path', 'pattern_type' ('exact' or 'regex'),
+              and optional 'max_results' parameters
+        _tool_response: Helper function to format responses
+        **kwargs: Additional keyword arguments
+        
+    Returns:
+        Formatted response with matching file paths, line numbers, and context
+    """
+    import re
+    
+    query = args.get("query", "")
+    if not query:
+        return _tool_response(request_id, "Error: 'query' parameter is required.")
+    
+    base = pathlib.Path("resources").resolve()
+    search_path = (base / args.get("path", "")).resolve()
+    
+    if not str(search_path).startswith(str(base)):
+        return _tool_response(request_id, f"Error: Path '{args.get('path')}' escapes 'resources' directory.")
+    
+    if not search_path.exists():
+        return _tool_response(request_id, f"Error: Path '{search_path}' does not exist.")
+    
+    pattern_type = args.get("pattern_type", "exact")
+    max_results = int(args.get("max_results", 20))
+    
+    # Compile regex if needed
+    try:
+        if pattern_type == "regex":
+            compiled_pattern = re.compile(query, re.IGNORECASE)
+        else:
+            compiled_pattern = re.compile(re.escape(query), re.IGNORECASE)
+    except re.error as e:
+        return _tool_response(request_id, f"Invalid regex pattern: {e}")
+    
+    matches = []
+    files_searched = 0
+    
+    # Walk the directory tree
+    for root, dirs, files in os.walk(search_path):
+        # Skip hidden and common noise directories
+        dirs[:] = [d for d in dirs if d not in _SKIP_DIRS and not d.startswith('.')]
+        
+        for filename in sorted(files):
+            filepath = pathlib.Path(root) / filename
+            
+            # Skip binary files by extension
+            if filepath.suffix.lower() in {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.ico', 
+                                            '.pdf', '.zip', '.tar', '.gz', '.exe', '.dll', '.so'}:
+                continue
+            
+            files_searched += 1
+            
+            try:
+                content = filepath.read_text(encoding="utf-8", errors="ignore")
+                lines = content.split('\n')
+                
+                for line_num, line in enumerate(lines, start=1):
+                    if compiled_pattern.search(line):
+                        # Extract context: the matching line plus 2 lines before and after
+                        start_ctx = max(0, line_num - 3)
+                        end_ctx = min(len(lines), line_num + 2)
+                        context_lines = lines[start_ctx:end_ctx]
+                        
+                        matches.append({
+                            "file": str(filepath.relative_to(base)),
+                            "line": line_num,
+                            "context": "\n".join(f"  {i+start_ctx+1} │ {l[:150]}" 
+                                               for i, l in enumerate(context_lines))
+                        })
+                        
+                        if len(matches) >= max_results:
+                            break
+            except (UnicodeDecodeError, PermissionError, OSError):
+                continue
+            
+            if len(matches) >= max_results:
+                break
+        
+        if len(matches) >= max_results:
+            break
+    
+    if not matches:
+        return _tool_response(request_id, 
+            f"No matches found. Searched {files_searched} file(s) in '{search_path}'.")
+    
+    result = f"Found {len(matches)} match(es) in {files_searched} file(s):\n\n"
+    result += "─" * 60 + "\n"
+    
+    for i, match in enumerate(matches, 1):
+        result += f"\n📄 {match['file']} (line {match['line']})\n"
+        result += match['context'] + "\n"
+        if i < len(matches):
+            result += "─" * 60 + "\n"
+    
+    return _tool_response(request_id, result)
+
+async def handle_delete_file(request_id: str, args: dict, _tool_response, **kwargs) -> dict:
+    """Delete a file from the resources directory.
+    
+    Args:
+        request_id: Unique identifier for the MCP request
+        args: Dictionary containing 'path' parameter
+        _tool_response: Helper function to format responses
+        **kwargs: Additional keyword arguments
+        
+    Returns:
+        Confirmation message or error
+    """
+    base = pathlib.Path("resources")
+    target = (base / args.get("path", "")).resolve()
+
+    if not str(target).startswith(str(base.resolve())):
+        return _tool_response(request_id, f"Error: Path '{args.get('path')}' escapes 'resources' directory.")
+
+    if not target.exists():
+        return _tool_response(request_id, f"File not found: '{target.name}'.")
+
+    if target.is_dir():
+        return _tool_response(request_id, f"'{target.name}' is a directory. Use remove_directory instead.")
+
+    try:
+        target.unlink()
+        return _tool_response(request_id, f"Successfully deleted '{target.name}'.")
+    except Exception as e:
+        return _tool_response(request_id, f"Error deleting file: {str(e)}")
+
+
+async def handle_remove_directory(request_id: str, args: dict, _tool_response, **kwargs) -> dict:
+    """Remove a directory from the resources directory.
+    
+    Args:
+        request_id: Unique identifier for the MCP request
+        args: Dictionary containing 'path' and optional 'recursive' parameters
+        _tool_response: Helper function to format responses
+        **kwargs: Additional keyword arguments
+        
+    Returns:
+        Confirmation message or error
+    """
+    import shutil
+    
+    base = pathlib.Path("resources")
+    target = (base / args.get("path", "")).resolve()
+
+    if not str(target).startswith(str(base.resolve())):
+        return _tool_response(request_id, f"Error: Path '{args.get('path')}' escapes 'resources' directory.")
+
+    if not target.exists():
+        return _tool_response(request_id, f"Directory not found: '{target.name}'.")
+
+    if not target.is_dir():
+        return _tool_response(request_id, f"'{target.name}' is a file. Use delete_file instead.")
+
+    recursive = args.get("recursive", False)
+
+    try:
+        if recursive:
+            shutil.rmtree(target)
+            return _tool_response(request_id, f"Successfully removed directory '{target.name}' and all contents.")
+        else:
+            if any(target.iterdir()):
+                return _tool_response(request_id, f"Directory '{target.name}' is not empty. Use recursive=True to remove contents.")
+            target.rmdir()
+            return _tool_response(request_id, f"Successfully removed empty directory '{target.name}'.")
+    except Exception as e:
+        return _tool_response(request_id, f"Error removing directory: {str(e)}")

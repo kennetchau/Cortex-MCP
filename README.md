@@ -5,8 +5,9 @@ A modular Model Context Protocol (MCP) server built with FastAPI, providing tool
 ## Features
 
 - **Modular Architecture** - Each tool is easily maintainable
-- **File Operations** - Read, write, append, replace, and insert text in files
+- **File Operations** - Read, write, append, replace, insert, and delete files
 - **Web Research** - Search the live web (DDGS) and scrape/summarize URLs
+- **File Search** - Grep through files with exact match or regex patterns
 - **Command Execution** - Run shell commands in a sandboxed environment
 - **Markdown to PDF** - Convert Markdown files to styled PDF documents
 - **Strict Isolation** - Bubblewrap sandbox with disposable `/tmp`
@@ -25,6 +26,9 @@ A modular Model Context Protocol (MCP) server built with FastAPI, providing tool
 | `append_to_file` | Append text to existing files |
 | `replace_in_file` | Find and replace text in files |
 | `insert_after_marker` | Insert text after a marker line |
+| `search_files` | Search for text patterns within files (exact or regex) |
+| `delete_file` | Delete a file from the resources directory |
+| `remove_directory` | Remove a directory (with optional recursive flag) |
 | `run_command` | Execute shell commands in sandbox |
 | `md_to_pdf` | Convert a Markdown file to a styled PDF document |
 

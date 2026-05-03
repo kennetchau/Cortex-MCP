@@ -18,6 +18,9 @@ from tools import (
     handle_append_to_file,
     handle_replace_in_file,
     handle_insert_after_marker,
+    handle_search_files,
+    handle_delete_file,
+    handle_remove_directory,
     handle_run_command,
     handle_md_to_pdf,
 )
@@ -61,6 +64,9 @@ TOOL_HANDLERS = {
     "append_to_file": handle_append_to_file,
     "replace_in_file": handle_replace_in_file,
     "insert_after_marker": handle_insert_after_marker,
+    "search_files": handle_search_files,
+    "delete_file": handle_delete_file,
+    "remove_directory": handle_remove_directory,
     "run_command": handle_run_command,
     "md_to_pdf": handle_md_to_pdf,
 }
