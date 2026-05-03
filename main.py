@@ -138,5 +138,13 @@ async def handle_mcp(request: Request):
             })
 
 if __name__ == "__main__":
+    import argparse
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+    parser = argparse.ArgumentParser(description="MCP Server")
+    parser.add_argument("-t", "--test", action="store_true", help="Run in test mode (port 9000)")
+    args = parser.parse_args()
+
+    port = 9000 if args.test else 8000
+    print(f"Starting MCP server on port {port}...")
+    uvicorn.run(app, host="0.0.0.0", port=port)
