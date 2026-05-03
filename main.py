@@ -27,6 +27,7 @@ from tools import (
     handle_query_context,
     handle_clear_context,
     handle_list_projects,
+    handle_add_context_alias,
 )
 from tools.web_research import scrape_and_summarize
 
@@ -77,6 +78,7 @@ TOOL_HANDLERS = {
     "query_context": handle_query_context,
     "clear_context": handle_clear_context,
     "list_projects": handle_list_projects,
+    "add_context_alias": handle_add_context_alias,
 }
 
 # Isolated tool dispatcher
