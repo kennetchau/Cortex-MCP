@@ -60,3 +60,5 @@ resources/
 # Cache directories
 .cache/
 .uv_cache/
+# Environment variables (local paths, secrets)
+.env
