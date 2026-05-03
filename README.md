@@ -87,8 +87,8 @@ The sandbox passes specific environment variables into the bubblewrap container:
 
 | Variable | Value | Purpose |
 |----------|-------|---------|
-| `PATH` | `/usr/local/bin:/usr/bin:/home/ken/.local/bin` | Includes user-installed tools (e.g., `uv`) |
-| `HOME` | `/home/ken` | User home directory |
+| `PATH` | `/usr/local/bin:/usr/bin:<user>/.local/bin` | Includes user-installed tools (e.g., `uv`) |
+| `HOME` | `<user>` | User home directory (derived from env or BASE_DIR) |
 | `UV_CACHE_DIR` | `/tmp/uv-cache` | Redirects uv's cache (host `~/.cache` is read-only) |
 
 All other environment variables from the parent process are inherited but not explicitly set.
