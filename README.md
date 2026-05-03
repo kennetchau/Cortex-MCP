@@ -76,6 +76,18 @@ The `run_command` tool uses bubblewrap for isolation:
 - **Writable resources directory** (`--bind resources resources`)
 - **DNS resolution enabled** (no `/etc` restriction)
 
+## Environment Variables
+
+The sandbox passes specific environment variables into the bubblewrap container:
+
+| Variable | Value | Purpose |
+|----------|-------|---------|
+| `PATH` | `/usr/local/bin:/usr/bin:/home/ken/.local/bin` | Includes user-installed tools (e.g., `uv`) |
+| `HOME` | `/home/ken` | User home directory |
+| `UV_CACHE_DIR` | `/tmp/uv-cache` | Redirects uv's cache (host `~/.cache` is read-only) |
+
+All other environment variables from the parent process are inherited but not explicitly set.
+
 ## Disclaimer
 
 This project was developed with assistance from **Qwen 3.6**, a large language model by Alibaba Group's Tongyi Lab. While AI assisted in code generation, documentation, and refactoring, all technical decisions and final implementations were reviewed and validated by the human developer.

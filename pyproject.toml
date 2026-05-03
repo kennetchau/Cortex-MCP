@@ -16,6 +16,4 @@ dependencies = [
 ]
 
 [tool.uv.workspace]
-members = [
-    "resources/test",
-]
+exclude = ["resources/*"]
