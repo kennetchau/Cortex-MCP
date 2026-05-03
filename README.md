@@ -20,7 +20,7 @@ A modular Model Context Protocol (MCP) server built with FastAPI, providing tool
 | `add` | Add two numbers together |
 | `web_search` | Search the live web for information |
 | `fetch_content` | Scrape a URL and extract content |
-| `list_files` | List files and directories |
+| `list_files` | List files and directories (add `recursive=true` for a full tree view) |
 | `read_file` | Read files with line-based windowing |
 | `write_file` | Write text to files |
 | `append_to_file` | Append text to existing files |

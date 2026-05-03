@@ -33,10 +33,13 @@
     },
     {
         "name": "list_files",
-        "description": "List files and directories in a specified folder.",
+        "description": "List files and directories in a specified folder. Use recursive=true for a full tree view of the directory structure.",
         "inputSchema": {
             "type": "object",
-            "properties": {"path": {"type": "string", "description": "Absolute or relative path to list"}},
+            "properties": {
+                "path": {"type": "string", "description": "Absolute or relative path to list"},
+                "recursive": {"type": "boolean", "default": false, "description": "If true, show a recursive tree view of all subdirectories"}
+            },
             "required": ["path"]
         }
     },
