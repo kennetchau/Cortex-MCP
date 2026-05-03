@@ -1,7 +1,22 @@
 import asyncio
+import os
 from pathlib import Path
 
 from config import BASE_DIR
+
+
+def _get_home_dir():
+    """Get home directory dynamically. Tries env var first, then derives from BASE_DIR."""
+    # Try HOME environment variable first
+    home = os.environ.get("HOME")
+    if home:
+        return home
+    
+    # Derive from BASE_DIR (parent of project root)
+    try:
+        return str(BASE_DIR.parent)
+    except Exception:
+        return "/home/user"  # Generic fallback
 
 
 async def handle_run_command(request_id: str, args: dict, _tool_response, **kwargs) -> dict:
@@ -19,11 +34,14 @@ async def handle_run_command(request_id: str, args: dict, _tool_response, **kwar
     if not str(target_cwd).startswith(str(base)):
         return _tool_response(request_id, f"Error: CWD '{cwd}' escapes the sandbox directory.")
 
+    # Get home directory dynamically
+    home_dir = _get_home_dir()
+    
     # Strict isolation bubblewrap sandbox
     bwrap_cmd = [
         "bwrap",
-        "--setenv", "PATH", "/usr/local/bin:/usr/bin:<user>/.local/bin",
-        "--setenv", "HOME", "<user>",
+        "--setenv", "PATH", f"/usr/local/bin:/usr/bin:{home_dir}/.local/bin",
+        "--setenv", "HOME", home_dir,
         "--setenv", "UV_CACHE_DIR", "/tmp/uv-cache",
         "--ro-bind", "/", "/",           # Root filesystem read-only
         # Removed --tmpfs /etc so DNS resolution works
