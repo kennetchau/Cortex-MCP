@@ -36,8 +36,9 @@ async def handle_md_to_pdf(request_id: str, args: dict, _tool_response, **kwargs
         if not source_path:
             return _tool_response(request_id, "Error: 'source_path' is required.")
         
-        # Resolve paths relative to resources directory
-        base = Path("resources")
+        # Resolve paths relative to sandbox base
+        from config import BASE_DIR
+        base = BASE_DIR
         source_file = (base / source_path).resolve()
         
         if not source_file.exists():
