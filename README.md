@@ -11,6 +11,7 @@ A modular Model Context Protocol (MCP) server built with FastAPI, providing tool
 - **Command Execution** - Run shell commands in a sandboxed environment
 - **Markdown to PDF** - Convert Markdown files to styled PDF documents
 - **Strict Isolation** - Bubblewrap sandbox with disposable `/tmp`
+- **Persistent Context** - SQLite knowledge base with full-text search, project isolation, and alias resolution
 
 ## Tools
 
@@ -31,9 +32,10 @@ A modular Model Context Protocol (MCP) server built with FastAPI, providing tool
 | `remove_directory` | Remove a directory (with optional recursive flag) |
 | `run_command` | Execute shell commands in sandbox |
 | `md_to_pdf` | Convert a Markdown file to a styled PDF document |
-| `store_context` | Store project-specific context in SQLite knowledge base |
-| `query_context` | Query stored context using keyword or key lookup |
-| `clear_context` | Clear stored context entries |
+| `store_context` | Store or update project-specific context in SQLite knowledge base (key resolves via canonical name or alias) |
+| `query_context` | Query stored context — supports keyword search (FTS5), direct key lookup, or lists all keys. Keys resolve via canonical name or registered aliases |
+| `clear_context` | Clear stored context entries by key or wipe all entries for a project |
+| `add_context_alias` | Register an alternate name (alias) for an existing context entry. The alias works transparently in store/query/clear operations |
 | `list_projects` | List all known projects with last update timestamps |
 
 ## Installation
@@ -70,6 +72,25 @@ mcp_server/
 │   ├── run_command.py   # Shell command execution
 │   ├── md_to_pdf.py     # Markdown to PDF conversion
 │   └── sqlite_store.py  # SQLite knowledge base for persistent context
+│ ```
+ │ 
+ ## Persistent Context Usage
+ │ 
+ The `sqlite_store` module provides a cross-session knowledge base for LLM context:
+ │ 
+ ### Storing & Querying Context
+```json
+// Store a new entry
+{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"store_context","arguments":{"key":"auth-flow","content":"User logs in with email/password","project":"my-app"}}}
+
+// Query by canonical key
+{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"query_context","arguments":{"key":"auth-flow","project":"my-app"}}}
+
+// Add an alias — now "login" resolves to the same entry
+{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"add_context_alias","arguments":{"context_key":"auth-flow","alias_name":"login","project":"my-app"}}}
+
+// Query by alias — returns the same entry, shows "Matched via: alias 'login'"
+{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"query_context","arguments":{"key":"login","project":"my-app"}}}
 ```
 
 ## Sandbox Configuration
