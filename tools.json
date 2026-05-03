@@ -185,25 +185,38 @@
     },
     {
         "name": "query_context",
-        "description": "Query stored context using keyword search or direct key lookup. Returns matching entries from SQLite knowledge base.",
+        "description": "Query stored context using keyword search or direct key lookup. Key resolution checks canonical keys first, then aliases. Returns matching entries from SQLite knowledge base.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "project": {"type": "string", "default": "default", "description": "Project identifier to filter results"},
                 "keyword": {"type": "string", "description": "Keyword to search across all stored context (full-text search)"},
-                "key": {"type": "string", "description": "Direct key lookup (alternative to keyword)"}
+                "key": {"type": "string", "description": "Direct key lookup — resolves via canonical key or alias (alternative to keyword)"}
             }
         }
     },
    {
         "name": "clear_context",
-        "description": "Clear stored context entries. Either a specific key or all entries for a project.",
+        "description": "Clear stored context entries. Either a specific key or all entries for a project. Keys resolve via canonical name or alias.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "project": {"type": "string", "default": "default", "description": "Project identifier to clear"},
-                "key": {"type": "string", "description": "Specific key to clear (omit to clear entire project)"}
+                "key": {"type": "string", "description": "Specific key to clear — resolves via canonical name or alias (omit to clear entire project)"}
             }
+        }
+    },
+    {
+        "name": "add_context_alias",
+        "description": "Add an alternate name (alias) for an existing context entry. The alias can be used in place of the canonical key in store/query/clear operations.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "context_key": {"type": "string", "description": "The canonical key of the context entry to alias"},
+                "alias_name": {"type": "string", "description": "The alternate name to register as an alias"},
+                "project": {"type": "string", "default": "default", "description": "Project identifier to scope the alias"}
+            },
+            "required": ["context_key", "alias_name"]
         }
     },
     {
