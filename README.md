@@ -6,8 +6,7 @@ A modular Model Context Protocol (MCP) server built with FastAPI, providing tool
 
 - **Modular Architecture** - Each tool is easily maintainable
 - **File Operations** - Read, write, append, replace, and insert text in files
-- **Web Search** - Search the live web using DDGS
-- **URL Fetching** - Scrape and summarize web content
+- **Web Research** - Search the live web (DDGS) and scrape/summarize URLs
 - **Command Execution** - Run shell commands in a sandboxed environment
 - **Markdown to PDF** - Convert Markdown files to styled PDF documents
 - **Strict Isolation** - Bubblewrap sandbox with disposable `/tmp`
@@ -58,8 +57,7 @@ mcp_server/
 ├── tools/               # MCP tool implementations
 │   ├── add.py           # Math operations
 │   ├── today.py         # Date/time
-│   ├── web_search.py    # Web search
-│   ├── fetch_content.py # URL scraping
+│   ├── web_research.py  # Web search + URL scraping
 │   ├── files.py         # All file operations
 │   ├── run_command.py   # Shell command execution
 │   └── md_to_pdf.py     # Markdown to PDF conversion

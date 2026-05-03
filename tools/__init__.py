@@ -1,8 +1,7 @@
 # Tools package - contains all MCP tool implementations
 from .today import handle_today
 from .add import handle_add
-from .web_search import handle_web_search
-from .fetch_content import handle_fetch_content
+from .web_research import handle_web_search, handle_fetch_content
 from .files import (
     handle_list_files,
     handle_read_file,

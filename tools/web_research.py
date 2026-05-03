@@ -1,6 +1,9 @@
-import httpx
-import trafilatura
+import asyncio
 from urllib.parse import urlparse
+
+import httpx
+from ddgs import DDGS
+import trafilatura
 
 
 async def scrape_and_summarize(url: str, max_words: int = 1000):
@@ -27,6 +30,23 @@ async def scrape_and_summarize(url: str, max_words: int = 1000):
             return f"URL: {url}\nContent:\n{extracted}"
     except Exception as e:
         return f"Error fetching {url}: {str(e)}"
+
+
+async def handle_web_search(request_id: str, args: dict, _tool_response, logger=None, **kwargs) -> dict:
+    """Search the live web for current information, news, or facts."""
+    query = args.get("query", "")
+    try:
+        # Run sync DDGS in a thread to avoid blocking the event loop
+        results = await asyncio.to_thread(DDGS().text, query, backend='lite', max_results=5)
+        formatted = "\n\n".join([
+            f"Title: {r['title']}\nURL: {r['href']}\nSnippet: {r.get('body', 'N/A')}"
+            for r in results
+        ])
+        return _tool_response(request_id, formatted)
+    except Exception as e:
+        if logger:
+            logger.error(f"Search failed: {e}")
+        return _tool_response(request_id, f"Search failed: {str(e)}")
 
 
 async def handle_fetch_content(request_id: str, args: dict, _tool_response, **kwargs) -> dict:

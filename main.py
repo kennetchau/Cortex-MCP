@@ -6,9 +6,6 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse
-import httpx
-import trafilatura
-
 # Import tools from the tools package
 from tools import (
     handle_today,
@@ -24,6 +21,7 @@ from tools import (
     handle_run_command,
     handle_md_to_pdf,
 )
+from tools.web_research import scrape_and_summarize
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -66,31 +64,6 @@ TOOL_HANDLERS = {
     "run_command": handle_run_command,
     "md_to_pdf": handle_md_to_pdf,
 }
-
-# Async scraper with timeout & headers (used by fetch_content)
-async def scrape_and_summarize(url: str, max_words: int = 1000):
-    try:
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.5",
-            "Connection": "keep-alive"
-        }
-
-        async with httpx.AsyncClient(timeout=15.0, headers=headers) as client:
-            response = await client.get(url)
-            extracted = trafilatura.extract(response.text)
-
-            if not extracted:
-                return f"No readable content found in {url}"
-
-            words = extracted.split()
-            if len(words) > max_words:
-                extracted = " ".join(words[:max_words]) + "... (content truncated)"
-
-            return f"URL: {url}\nContent:\n{extracted}"
-    except Exception as e:
-        return f"Error fetching {url}: {str(e)}"
 
 # Isolated tool dispatcher
 async def handle_tool_call(request_id: str, name: str, args: dict) -> JSONResponse:
