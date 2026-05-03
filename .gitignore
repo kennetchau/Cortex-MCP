@@ -60,3 +60,7 @@ resources/
 # Cache directories
 .cache/
 .uv_cache/
+# Environment variables (local paths, secrets)
+.env
+# MCP context cache (SQLite database)
+.mcp_cache/

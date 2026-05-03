@@ -31,6 +31,10 @@ A modular Model Context Protocol (MCP) server built with FastAPI, providing tool
 | `remove_directory` | Remove a directory (with optional recursive flag) |
 | `run_command` | Execute shell commands in sandbox |
 | `md_to_pdf` | Convert a Markdown file to a styled PDF document |
+| `store_context` | Store project-specific context in SQLite knowledge base |
+| `query_context` | Query stored context using keyword or key lookup |
+| `clear_context` | Clear stored context entries |
+| `list_projects` | List all known projects with last update timestamps |
 
 ## Installation
 
@@ -64,7 +68,8 @@ mcp_server/
 │   ├── web_research.py  # Web search + URL scraping
 │   ├── files.py         # All file operations
 │   ├── run_command.py   # Shell command execution
-│   └── md_to_pdf.py     # Markdown to PDF conversion
+│   ├── md_to_pdf.py     # Markdown to PDF conversion
+│   └── sqlite_store.py  # SQLite knowledge base for persistent context
 ```
 
 ## Sandbox Configuration
@@ -83,7 +88,7 @@ The sandbox passes specific environment variables into the bubblewrap container:
 | Variable | Value | Purpose |
 |----------|-------|---------|
 | `PATH` | `/usr/local/bin:/usr/bin:<user>/.local/bin` | Includes user-installed tools (e.g., `uv`) |
-| `HOME` | `<user>` | User home directory |
+| `HOME` | `<user>` | User home directory (derived from env or BASE_DIR) |
 | `UV_CACHE_DIR` | `/tmp/uv-cache` | Redirects uv's cache (host `~/.cache` is read-only) |
 
 All other environment variables from the parent process are inherited but not explicitly set.
