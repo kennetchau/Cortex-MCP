@@ -9,17 +9,65 @@ import pathlib
 import os
 
 
+# Directories/files to skip when building tree view
+_SKIP_DIRS = {"__pycache__", ".git", ".idea", ".vscode", ".mypy_cache", ".pytest_cache", "node_modules", ".venv", "venv"}
+
+
+def _build_tree(root: pathlib.Path, prefix: str = "", is_last: bool = True, is_root: bool = False) -> str:
+    """Recursively build a tree-style string representation of a directory.
+    
+    Args:
+        root: The path to list (file or directory)
+        prefix: Leading indentation prefix for this level
+        is_last: Whether this is the last item at its level
+        is_root: Whether this is the top-level call
+        
+    Returns:
+        Formatted tree string
+    """
+    lines = []
+    name = root.name
+    
+    if is_root:
+        # Root level — no connector needed
+        icon = "📁 " if root.is_dir() else "📄 "
+        lines.append(f"{icon}{name}")
+        child_prefix = ""
+    else:
+        # Subsequent levels — use tree connectors
+        connector = "└── " if is_last else "├── "
+        icon = "📁 " if root.is_dir() else "📄 "
+        lines.append(f"{prefix}{connector}{icon}{name}")
+        child_prefix = prefix + ("    " if is_last else "│   ")
+    
+    if root.is_dir():
+        try:
+            children = sorted(root.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower()))
+            # Filter out skipped directories
+            children = [c for c in children if c.name not in _SKIP_DIRS]
+            
+            for i, child in enumerate(children):
+                is_last_child = (i == len(children) - 1)
+                subtree = _build_tree(child, child_prefix, is_last_child)
+                if subtree:
+                    lines.append(subtree)
+        except PermissionError:
+            lines.append(f"{child_prefix}└── 🔒 (permission denied)")
+    
+    return "\n".join(lines)
+
+
 async def handle_list_files(request_id: str, args: dict, _tool_response, **kwargs) -> dict:
     """List files and directories in a specified folder.
     
     Args:
         request_id: Unique identifier for the MCP request
-        args: Dictionary containing 'path' parameter
+        args: Dictionary containing 'path' and optional 'recursive' parameters
         _tool_response: Helper function to format responses
         **kwargs: Additional keyword arguments
         
     Returns:
-        Formatted response with file/directory listing
+        Formatted response with file/directory listing or tree view
     """
     base = pathlib.Path("resources")
     target = (base / args.get("path", "")).resolve()
@@ -30,12 +78,20 @@ async def handle_list_files(request_id: str, args: dict, _tool_response, **kwarg
     if not target.exists():
         return _tool_response(request_id, f"Error: Path '{target}' does not exist.")
 
-    items = []
-    for p in sorted(target.iterdir()):
-        prefix = "📁 " if p.is_dir() else "📄 "
-        items.append(f"{prefix}{p.name}")
+    recursive = args.get("recursive", False)
 
-    return _tool_response(request_id, "\n".join(items) if items else "Directory is empty.")
+    if recursive:
+        # Build tree view
+        result = _build_tree(target, is_root=True)
+        return _tool_response(request_id, result)
+    else:
+        # Flat listing (original behavior)
+        items = []
+        for p in sorted(target.iterdir()):
+            prefix = "📁 " if p.is_dir() else "📄 "
+            items.append(f"{prefix}{p.name}")
+
+        return _tool_response(request_id, "\n".join(items) if items else "Directory is empty.")
 
 
 async def handle_read_file(request_id: str, args: dict, _tool_response, **kwargs) -> dict:
