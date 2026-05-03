@@ -107,6 +107,20 @@
         }
     },
     {
+        "name": "search_files",
+        "description": "Search for text patterns within files in the resources directory.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Text or regex pattern to search for"},
+                "path": {"type": "string", "default": ".", "description": "Directory path to search in (relative to resources/)"},
+                "pattern_type": {"type": "string", "default": "exact", "enum": ["exact", "regex"], "description": "Whether to treat query as exact text or regex pattern"},
+                "max_results": {"type": "integer", "default": 20, "description": "Maximum number of results to return"}
+            },
+            "required": ["query"]
+        }
+    },
+    {
         "name": "run_command",
         "description": "Execute a shell command within the 'resources/' sandbox directory. Policy blocks dangerous operations (rm -rf, sudo, apt, raw sh). Respects timeout and max_output limits.",
         "inputSchema": {
@@ -131,6 +145,29 @@
                 "css_path": {"type": "string", "description": "Optional path to a custom CSS stylesheet (relative to resources/)"}
             },
             "required": ["source_path"]
+        }
+    },
+    {
+        "name": "delete_file",
+        "description": "Delete a file from the resources directory.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Path to the file to delete (relative to resources/)"}
+            },
+            "required": ["path"]
+        }
+    },
+    {
+        "name": "remove_directory",
+        "description": "Remove a directory from the resources directory. Use recursive=true for non-empty directories.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Path to the directory to remove (relative to resources/)"},
+                "recursive": {"type": "boolean", "default": false, "description": "If true, removes directory and all contents recursively"}
+            },
+            "required": ["path"]
         }
     }
 ]
