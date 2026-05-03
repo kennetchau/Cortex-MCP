@@ -23,6 +23,10 @@ from tools import (
     handle_remove_directory,
     handle_run_command,
     handle_md_to_pdf,
+    handle_store_context,
+    handle_query_context,
+    handle_clear_context,
+    handle_list_projects,
 )
 from tools.web_research import scrape_and_summarize
 
@@ -69,6 +73,10 @@ TOOL_HANDLERS = {
     "remove_directory": handle_remove_directory,
     "run_command": handle_run_command,
     "md_to_pdf": handle_md_to_pdf,
+    "store_context": handle_store_context,
+    "query_context": handle_query_context,
+    "clear_context": handle_clear_context,
+    "list_projects": handle_list_projects,
 }
 
 # Isolated tool dispatcher

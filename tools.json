@@ -169,5 +169,49 @@
             },
             "required": ["path"]
         }
+    },
+    {
+        "name": "store_context",
+        "description": "Store or update project-specific context in SQLite knowledge base for cross-session persistence.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "key": {"type": "string", "description": "Identifier for this context entry (e.g., 'auth-flow', 'known-issues')"},
+                "content": {"type": "string", "description": "The actual context content to store"},
+                "project": {"type": "string", "default": "default", "description": "Project identifier to scope the context"}
+            },
+            "required": ["key", "content"]
+        }
+    },
+    {
+        "name": "query_context",
+        "description": "Query stored context using keyword search or direct key lookup. Returns matching entries from SQLite knowledge base.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project": {"type": "string", "default": "default", "description": "Project identifier to filter results"},
+                "keyword": {"type": "string", "description": "Keyword to search across all stored context (full-text search)"},
+                "key": {"type": "string", "description": "Direct key lookup (alternative to keyword)"}
+            }
+        }
+    },
+   {
+        "name": "clear_context",
+        "description": "Clear stored context entries. Either a specific key or all entries for a project.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project": {"type": "string", "default": "default", "description": "Project identifier to clear"},
+                "key": {"type": "string", "description": "Specific key to clear (omit to clear entire project)"}
+            }
+        }
+    },
+    {
+        "name": "list_projects",
+        "description": "List all known projects in the SQLite knowledge base with last update timestamps.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {}
+        }
     }
 ]

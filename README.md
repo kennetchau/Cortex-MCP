@@ -31,6 +31,10 @@ A modular Model Context Protocol (MCP) server built with FastAPI, providing tool
 | `remove_directory` | Remove a directory (with optional recursive flag) |
 | `run_command` | Execute shell commands in sandbox |
 | `md_to_pdf` | Convert a Markdown file to a styled PDF document |
+| `store_context` | Store project-specific context in SQLite knowledge base |
+| `query_context` | Query stored context using keyword or key lookup |
+| `clear_context` | Clear stored context entries |
+| `list_projects` | List all known projects with last update timestamps |
 
 ## Installation
 
@@ -64,7 +68,8 @@ mcp_server/
 │   ├── web_research.py  # Web search + URL scraping
 │   ├── files.py         # All file operations
 │   ├── run_command.py   # Shell command execution
-│   └── md_to_pdf.py     # Markdown to PDF conversion
+│   ├── md_to_pdf.py     # Markdown to PDF conversion
+│   └── sqlite_store.py  # SQLite knowledge base for persistent context
 ```
 
 ## Sandbox Configuration
