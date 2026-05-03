@@ -116,5 +116,18 @@
             },
             "required": ["command"]
         }
+    },
+    {
+        "name": "md_to_pdf",
+        "description": "Convert a Markdown file to a styled PDF document using markdown, pdfkit, and wkhtmltopdf.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "source_path": {"type": "string", "description": "Path to the source Markdown file (relative to resources/)"},
+                "output_path": {"type": "string", "description": "Path for the output PDF (defaults to same name with .pdf extension)"},
+                "css_path": {"type": "string", "description": "Optional path to a custom CSS stylesheet (relative to resources/)"}
+            },
+            "required": ["source_path"]
+        }
     }
 ]
