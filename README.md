@@ -47,7 +47,7 @@ uv sync
 
 ```bash
 # Start the server
-python main.py
+uv run main.py
 ```
 
 The server will start on `http://0.0.0.0:8000`.
@@ -79,6 +79,39 @@ The `run_command` tool uses bubblewrap for isolation:
 ## Disclaimer
 
 This project was developed with assistance from **Qwen 3.6**, a large language model by Alibaba Group's Tongyi Lab. While AI assisted in code generation, documentation, and refactoring, all technical decisions and final implementations were reviewed and validated by the human developer.
+
+## MCP Client Connection
+
+### Endpoint
+```
+POST http://localhost:8000/mcp
+Content-Type: application/json
+```
+
+### Supported Methods
+
+| Method | Purpose |
+|--------|---------|
+| `initialize` | Handshake — returns server info and capabilities |
+| `tools/list` | Returns all available tools from `tools.json` |
+| `tools/call` | Execute a tool by name with arguments |
+
+### Example: Initialize Connection
+```bash
+curl -X POST http://localhost:8000/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize"}'
+```
+
+### Example: List Tools
+```bash
+curl -X POST http://localhost:8000/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
+```
+
+### Connecting via llama-cpp-web
+Add your MCP server URL (`http://localhost:8000/mcp`) in the settings under **Tools → MCP Servers**.
 
 ## License
 
