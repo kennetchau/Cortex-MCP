@@ -20,7 +20,9 @@ async def handle_run_command(request_id: str, args: dict, _tool_response, **kwar
     # Strict isolation bubblewrap sandbox
     bwrap_cmd = [
         "bwrap",
-        "--clearenv",                    # Clear all inherited env vars
+        "--setenv", "PATH", "/usr/local/bin:/usr/bin:<user>/.local/bin",
+        "--setenv", "HOME", "<user>",
+        "--setenv", "UV_CACHE_DIR", "/tmp/uv-cache",
         "--ro-bind", "/", "/",           # Root filesystem read-only
         # Removed --tmpfs /etc so DNS resolution works
         "--tmpfs", "/tmp",               # Disposable temp (disappears on exit)
