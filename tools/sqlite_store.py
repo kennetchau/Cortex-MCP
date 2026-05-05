@@ -291,12 +291,23 @@ async def handle_query_context(request_id: str, args: dict, _tool_response, logg
     project_arg = args.get("project", None)
     keyword = args.get("keyword", "")
     key = args.get("key", None)
+    limit = args.get("limit", 20)
+    sort_by = args.get("sort_by", "updated_at")  # "updated_at" or "key"
     
-    # Resolve project ID
+    # Resolve project ID: explicit value → scoped; missing → cross-project search
     if project_arg and project_arg != "default":
         resolved_project = project_arg
+        cross_project = False
+    elif project_arg is None or project_arg == "":
+        cross_project = True
     else:
         resolved_project = _detect_project_id()
+        cross_project = False
+    
+    # Validate sort parameter
+    valid_sorts = ("updated_at", "key")
+    if sort_by not in valid_sorts:
+        return _tool_response(request_id, f"Error: 'sort_by' must be one of: {', '.join(valid_sorts)}")
     
     try:
         db_path = _get_db_path()
@@ -307,60 +318,84 @@ async def handle_query_context(request_id: str, args: dict, _tool_response, logg
         results = []
         
         if keyword:
-            # Full-text search scoped to project
+            # Full-text search — scoped to project or global
             # Wrap in double quotes so FTS5 treats special chars (like -) as literals
             # e.g., "mcp-server" won't be parsed as "mcp -server" (exclude server)
             quoted_keyword = f'"{keyword}"'
-            cursor.execute(
-                """SELECT c.key, c.content, c.updated_at 
-                   FROM context c 
-                   JOIN context_fts f ON c.id = f.rowid 
-                   WHERE context_fts MATCH ? AND c.project = ?""",
-                (quoted_keyword, resolved_project)
-            )
+            if cross_project:
+                cursor.execute(
+                    f"""SELECT c.project, c.key, c.content, c.updated_at 
+                        FROM context c 
+                        JOIN context_fts f ON c.id = f.rowid 
+                        WHERE context_fts MATCH ?
+                        ORDER BY c.{sort_by} DESC
+                        LIMIT ?""",
+                    (quoted_keyword, limit)
+                )
+            else:
+                cursor.execute(
+                    f"""SELECT c.project, c.key, c.content, c.updated_at 
+                        FROM context c 
+                        JOIN context_fts f ON c.id = f.rowid 
+                        WHERE context_fts MATCH ? AND c.project = ?
+                        ORDER BY c.{sort_by} DESC
+                        LIMIT ?""",
+                    (quoted_keyword, resolved_project, limit)
+                )
             rows = cursor.fetchall()
             for row in rows:
                 results.append({
-                    "key": row[0],
-                    "content": row[1],
-                    "updated_at": row[2]
+                    "project": row[0],
+                    "key": row[1],
+                    "content": row[2],
+                    "updated_at": row[3]
                 })
         elif key:
             # Resolve key → canonical entry (checks aliases too)
             context_id, is_alias = _resolve_key(conn, key, resolved_project)
             if context_id:
                 cursor.execute(
-                    "SELECT key, content, updated_at FROM context WHERE id = ?",
+                    "SELECT project, key, content, updated_at FROM context WHERE id = ?",
                     (context_id,)
                 )
                 row = cursor.fetchone()
                 if row:
                     result = {
-                        "key": row[0],
-                        "content": row[1],
-                        "updated_at": row[2]
+                        "project": row[0],
+                        "key": row[1],
+                        "content": row[2],
+                        "updated_at": row[3]
                     }
                     if is_alias:
                         result["matched_via"] = f"alias '{key}'"
                     results.append(result)
         else:
-            # List all entries for this project (include content)
-            cursor.execute(
-                "SELECT key, content, updated_at FROM context WHERE project = ? ORDER BY updated_at DESC",
-                (resolved_project,)
-            )
+            # List all entries — scoped to project or global
+            sort_clause = f"ORDER BY c.{sort_by} DESC" if sort_by == "key" else "ORDER BY c.updated_at DESC"
+            if cross_project:
+                cursor.execute(
+                    f"SELECT c.project, c.key, c.content, c.updated_at FROM context c {sort_clause} LIMIT ?",
+                    (limit,)
+                )
+            else:
+                cursor.execute(
+                    f"SELECT c.project, c.key, c.content, c.updated_at FROM context c WHERE c.project = ? {sort_clause} LIMIT ?",
+                    (resolved_project, limit)
+                )
             rows = cursor.fetchall()
             for row in rows:
-                results.append({"key": row[0], "content": row[1], "updated_at": row[2]})
+                results.append({"project": row[0], "key": row[1], "content": row[2], "updated_at": row[3]})
         
         conn.close()
         
         if not results:
+            if cross_project:
+                return _tool_response(request_id, "No context found.")
             return _tool_response(request_id, f"No context found for project '{resolved_project}'.")
         
         formatted = "\n\n".join([
-            f"Key: {r['key']}\nUpdated: {r['updated_at']}\nContent:\n{r.get('content', 'N/A')}" + (f"\nMatched via: {r['matched_via']}" if "matched_via" in r else "")
-            for r in results[:20]  # Limit to 20 results
+            f"Project: {r['project']}\nKey: {r['key']}\nUpdated: {r['updated_at']}\nContent:\n{r.get('content', 'N/A')}" + (f"\nMatched via: {r['matched_via']}" if "matched_via" in r else "")
+            for r in results
         ])
         
         return _tool_response(request_id, formatted)
@@ -425,10 +460,22 @@ async def handle_list_projects(request_id: str, args: dict, _tool_response, logg
         _init_db(conn)
         cursor = conn.cursor()
         
-        cursor.execute(
-            "SELECT DISTINCT project, MAX(updated_at) as last_updated FROM context GROUP BY project ORDER BY last_updated DESC"
-        )
-        rows = cursor.fetchall()
+        # Query both context and project_changes tables, merge and deduplicate
+        cursor.execute("""
+            SELECT project, MAX(updated_at) as last_updated FROM context GROUP BY project
+            UNION ALL
+            SELECT project, MAX(created_at) as last_updated FROM project_changes GROUP BY project
+        """)
+        all_rows = cursor.fetchall()
+        
+        # Deduplicate by project, keeping the latest timestamp
+        project_map = {}
+        for project, updated_at in all_rows:
+            if project not in project_map or (updated_at and project_map[project] and updated_at > project_map[project]):
+                project_map[project] = updated_at
+        
+        rows = [(proj, ts) for proj, ts in project_map.items()]
+        rows.sort(key=lambda x: x[1] or "", reverse=True)
         
         conn.close()
         
