@@ -1,185 +1,110 @@
-# Project Changes Tracking System — Requirements
+# Context Store — Audit & Requirements
 
-## 1. Problem Statement
-
-The current context store uses a flat key-value model (`context` table with `key`, `content`, `project`). This works well for static documentation but doesn't support tracking **time-based events** across projects.
-
-Kenneth needs to:
-- Record significant changes made to each project (bug fixes, refactors, features, milestones)
-- Track the timeline/history of each change (steps taken, files affected, dates)
-- Query changes by project, type, date range
-- Maintain a personal changelog without manual note-taking
-
-Currently, all project knowledge is stored as text blobs. There's no structured way to answer questions like:
-- "What bugfixes did I ship last week?"
-- "How did we fix the Flexmonster rendering issue in Bob?"
-- "What changed in the MCP server between sessions?"
+## Audit Date: May 5, 2026
 
 ---
 
-## 2. Goals
+## Current State
 
-| Goal | Priority |
-|------|----------|
-| Track what changed in each project over time | Must Have |
-| Store detailed step-by-step history per change | Must Have |
-| Query changes by project, type, or date range | Must Have |
-| Non-destructive — existing `context` table unchanged | Must Have |
-| Simple schema migration from existing DB | Should Have |
-| Searchable via FTS for natural language queries | Nice to Have |
+### Architecture
+- **Database:** SQLite at `.mcp_cache/context.db`
+- **Schema:** Two independent systems sharing one DB
+  - `context` table — flat key-value pairs (static reference info)
+  - `project_changes` + `project_change_details` tables — timeline-based change tracking
+- **Search:** FTS5 virtual tables synced via triggers (ai/ad/au)
+- **Project ID resolution:** pyproject.toml → git remote origin URL → directory name
 
----
+### Tool Inventory (11 handlers in sqlite_store.py)
 
-## 3. Functional Requirements
+| Handler | Purpose | Parameters |
+|---------|---------|------------|
+| `handle_store_context` | Upsert context entry | key, content, project |
+| `handle_query_context` | Keyword search, key lookup, or list-all | project, keyword, key |
+| `handle_clear_context` | Delete single entry or all for a project | key, project |
+| `handle_list_projects` | List projects with last update timestamps | — |
+| `handle_add_context_alias` | Register alternate name for existing entry | context_key, alias_name, project |
+| `handle_add_project_change` | Record new change entry | project, key, change_type, summary |
+| `handle_add_change_step` | Add timeline step to a change | change_key, project, step, date, details?, files_changed? |
+| `handle_list_project_changes` | Filterable listing of changes | project, change_type?, date_from?, date_to? |
+| `handle_get_change_history` | Full history with timeline steps | change_key, project |
+| `handle_search_project_changes` | FTS search across summaries | query, project?, change_type? |
 
-### FR-1: Record a New Change
-- Create a new change entry with: project name, key identifier, change type, summary
-- Change types: `bugfix`, `refactor`, `feature`, `milestone`, `config`, `other`
-- Key must be unique within a project (e.g., `mcp-fix-context-list`, `bob-config-refactor`)
-
-### FR-2: Log Timeline Steps
-- Each change can have multiple timeline steps
-- Each step records: stage description, date, details, files affected
-- Steps are ordered chronologically
-- Cascade delete: removing a change removes all its steps
-
-### FR-3: Query Changes
-- List all changes for a specific project, ordered by date
-- Filter by change type (`bugfix`, `refactor`, etc.)
-- Filter by date range
-- Full-text search across summaries (scoped to project if specified)
-
-### FR-4: View Full History
-- Join main change table with timeline steps
-- Display complete audit trail for any single change
-- Show company/role-like metadata if applicable
-
-### FR-5: Update Existing Changes
-- Add new timeline steps to existing changes
-- Update summary or metadata without breaking history
+### Known Projects (as of audit)
+- **mcp-server** — Architecture docs, module breakdowns, known issues
+- **job-app** — Job applications, resume file paths, tech match notes
+- **todo** — Task tracking
 
 ---
 
-## 4. Schema Design
+## Defects (Fixed ✅)
 
-### Table: `project_changes`
+### D1: `list_projects()` only queries context table — FIXED
+**Fix applied:** UNION with `project_changes` table, deduplicate by project keeping latest timestamp.  
+**Result:** Projects tracked only via changes now appear in the list.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | Internal ID |
-| `project` | TEXT | NOT NULL | Project identifier (e.g., "mcp-server", "bob") |
-| `key` | TEXT | NOT NULL | Human-readable sub-key within project (e.g., "fix-context-list") |
-| `change_type` | TEXT | NOT NULL | Category: bugfix/refactor/feature/milestone/config/other |
-| `summary` | TEXT | NOT NULL | One-line description of what changed |
-| `created_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | When the change was first recorded |
-| `updated_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | Last modification time |
+### D2: No cross-project search in `query_context` — FIXED
+**Fix applied:** When project is None or empty, searches all projects. Results include project field.  
+**Result:** Global keyword search across all stored context now works.
 
-**Unique Constraint:**
-- UNIQUE `(project, key)` — prevents duplicate changes per project
-
-**Indexes:**
-- `idx_project_changes_project` on `(project)`
-- `idx_project_changes_type` on `(change_type)`
-- `idx_project_changes_created` on `(created_at)`
-
-### Table: `project_change_details`
-
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | Internal ID |
-| `change_id` | INTEGER | NOT NULL → REFERENCES `project_changes(id)` ON DELETE CASCADE | Parent change |
-| `step` | TEXT | NOT NULL | Stage name (e.g., "identified root cause", "implemented fix", "tested") |
-| `date` | DATE | NOT NULL | Date this step occurred |
-| `details` | TEXT | | Detailed description of what happened |
-| `files_changed` | TEXT | | Comma-separated file paths or JSON array |
-| `created_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | When this step was logged |
-
-**Indexes:**
-- `idx_change_details_change_id` on `(change_id)`
-- `idx_change_details_date` on `(date)`
+### D3: Inconsistent API between query tools — FIXED
+**Fix applied:** Added `limit` and `sort_by` params to `query_context`. Defaults: limit=20, sort_by="updated_at". Also supports sort_by="key".  
+**Result:** Both query tools now have consistent pagination and sorting capabilities.
 
 ---
 
-## 5. Tool Surface (New MCP Tools)
+## Improvements (Should Fix)
 
-| Tool Name | Purpose | Key Arguments |
-|-----------|---------|---------------|
-| `add_project_change` | Record a new change entry | `project`, `key`, `change_type`, `summary` |
-| `add_change_step` | Add a timeline step to a change | `change_key`, `project`, `step`, `date`, `details`, `files_changed` |
-| `list_project_changes` | List changes for a project | `project`, optional `change_type`, optional `date_from`, `date_to` |
-| `get_change_history` | Get full history for one change | `change_key`, `project` |
-| `search_project_changes` | FTS search across all changes | `query`, optional `project`, optional `change_type` |
-
----
-
-## 6. Migration Plan
-
-1. **Check if tables exist** — `_init_db()` runs `SELECT name FROM sqlite_master WHERE type='table' AND name IN ('project_changes', 'project_change_details')`
-2. **Create tables** if they don't exist
-3. **No data migration needed** — existing `context` table stays untouched
-4. **Backwards compatible** — all existing tools continue to work unchanged
-
----
-
-## 7. Non-Functional Requirements
-
-| Requirement | Detail |
-|-------------|--------|
-| **Performance** | Queries should return in <100ms for typical datasets (<1000 changes) |
-| **Data Integrity** | Foreign keys enforced, cascade deletes on change removal |
-| **Extensibility** | Schema allows adding columns later (e.g., PR URL, reviewer, commit hash) |
-| **Human Readable** | Keys and summaries should be clear without context |
-| **Audit Trail** | Every step is timestamped; no overwrites of historical data |
-
----
-
-## 8. Example Usage
-
-### Record a change:
-```python
-add_project_change(
-    project="mcp-server",
-    key="fix-context-list",
-    change_type="bugfix",
-    summary="Fixed query_context returning N/A for list-all queries"
-)
-```
-
-### Add timeline steps:
-```python
-add_change_step(
-    change_key="fix-context-list",
-    project="mcp-server",
-    step="identified root cause",
-    date="2026-05-05",
-    details="SELECT missing content column in list-all branch",
-    files_changed="tools/sqlite_store.py"
-)
-
-add_change_step(
-    change_key="fix-context-list",
-    project="mcp-server",
-    step="tested & deployed",
-    date="2026-05-05",
-    details="curl test passed, pushed to origin/llm_copy",
-    files_changed="tools/sqlite_store.py"
-)
-```
-
-### Query results:
+### I1: Unstructured content — no metadata fields
+**Problem:** Content is plain text. Filtering by status/type requires parsing.  
+**Example:** Todo entry has "Status: done" embedded in markdown text.  
+**Proposed schema addition:**
 ```sql
--- All bugfixes across all projects this week
-SELECT project, key, summary, created_at 
-FROM project_changes 
-WHERE change_type = 'bugfix' AND created_at >= DATE('now', '-7 days')
-ORDER BY created_at DESC;
+ALTER TABLE context ADD COLUMN status TEXT DEFAULT 'active';
+-- Values: active, pending, completed, archived, deprecated
 ```
+**Benefit:** Instant filtering without content parsing.
+
+### I2: DB_PATH singleton re-initializes every connection
+**Location:** `_get_db_path()` function  
+**Problem:** Module-level `DB_PATH = None` cached, but each handler opens a new `sqlite3.connect()`.  
+**Impact:** Minor overhead under concurrent requests. SQLite handles it gracefully but unnecessarily.  
+**Fix:** Cache connection object or use connection pooling.
+
+### I3: `_detect_project_id()` re-imports BASE_DIR per call
+**Location:** Lines 59, 70 inside fallback chain  
+**Impact:** Minor inefficiency — repeated import on each project detection call.  
+**Fix:** Import at module level.
+
+### I4: Tool addition requires updating 4 places
+**Friction points:**
+1. Handler implementation file (e.g., `files.py`)
+2. `tools/__init__.py` re-export
+3. `main.py` imports + `TOOL_HANDLERS` dict
+4. `tools.json` schema definition (300 lines)
+**Fix:** Consider auto-discovery or generator script for tools.json.
 
 ---
 
-## 9. Decisions Made
+## What's Working Well
 
-1. **Key uniqueness** — Composite UNIQUE `(project, key)`. Different projects can share the same sub-key (e.g., both "mcp-server" and "bob" can have "fix-timing").
-2. **Reverts / changes** — New entry, never delete. Preserve full history so everything is traceable. If something was reverted, that's a new change entry documenting the revert.
-3. **FTS scope** — Search only `summary` by default. Can optionally scope to a specific project in queries.
-4. **Git integration** — Nice to have but not required. Manual entry is the primary workflow. Git data can be added later as an enhancement.
+- ✅ Schema design is solid — context + aliases + FTS5 triggers
+- ✅ Project change tracker with timeline steps well-designed
+- ✅ Alias resolution system works correctly (canonical → alias lookup)
+- ✅ FTS5 hyphen bug already fixed (`_fts_quote()` helper)
+- ✅ Change tracker filtering (change_type, date range) properly implemented
+- ✅ Cascade delete on project_changes removes all related steps
+- ✅ UNIQUE constraints prevent duplicates (key+project, project+key)
+
+---
+
+## Implementation Priority
+
+| # | Item | Type | Status | Effort |
+|---|------|------|--------|--------|
+| 1 | Fix D1: list_projects() | Defect | ✅ Done | Low |
+| 2 | Fix D2: cross-project search | Defect | ✅ Done | Low |
+| 3 | Add status column to context | Improvement | Pending | Medium |
+| 4 | Align query_context params | Improvement | ✅ Done (merged with D2) | Low |
+| 5 | Cache DB connection | Improvement | Pending | Medium |
+| 6 | Auto-generate tools.json | Improvement | Pending | Medium |
+| 7 | Module-level BASE_DIR import | Improvement | Pending | Trivial |
