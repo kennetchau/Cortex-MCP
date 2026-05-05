@@ -28,6 +28,11 @@ from tools import (
     handle_clear_context,
     handle_list_projects,
     handle_add_context_alias,
+    handle_add_project_change,
+    handle_add_change_step,
+    handle_list_project_changes,
+    handle_get_change_history,
+    handle_search_project_changes,
 )
 from tools.web_research import scrape_and_summarize
 
@@ -79,6 +84,11 @@ TOOL_HANDLERS = {
     "clear_context": handle_clear_context,
     "list_projects": handle_list_projects,
     "add_context_alias": handle_add_context_alias,
+    "add_project_change": handle_add_project_change,
+    "add_change_step": handle_add_change_step,
+    "list_project_changes": handle_list_project_changes,
+    "get_change_history": handle_get_change_history,
+    "search_project_changes": handle_search_project_changes,
 }
 
 # Isolated tool dispatcher
