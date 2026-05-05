@@ -226,5 +226,74 @@
             "type": "object",
             "properties": {}
         }
+    },
+    {
+        "name": "add_project_change",
+        "description": "Record a new project change entry (bugfix, refactor, feature, milestone, config, or other).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project": {"type": "string", "description": "Project identifier (e.g., 'mcp-server', 'bob')"},
+                "key": {"type": "string", "description": "Human-readable sub-key within project (e.g., 'fix-context-list')"},
+                "change_type": {"type": "string", "enum": ["bugfix", "refactor", "feature", "milestone", "config", "other"], "description": "Category of change"},
+                "summary": {"type": "string", "description": "One-line description of what changed"}
+            },
+            "required": ["project", "key", "change_type", "summary"]
+        }
+    },
+    {
+        "name": "add_change_step",
+        "description": "Add a timeline step to an existing project change.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "change_key": {"type": "string", "description": "The key of the change to add a step to"},
+                "project": {"type": "string", "description": "Project identifier"},
+                "step": {"type": "string", "description": "Stage name (e.g., 'identified root cause', 'implemented fix', 'tested')"},
+                "date": {"type": "string", "description": "Date this step occurred (YYYY-MM-DD)"},
+                "details": {"type": "string", "description": "Detailed description of what happened"},
+                "files_changed": {"type": "string", "description": "Comma-separated file paths or JSON array"}
+            },
+            "required": ["change_key", "project", "step", "date"]
+        }
+    },
+    {
+        "name": "list_project_changes",
+        "description": "List changes for a project with optional filters by type and date range.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project": {"type": "string", "description": "Project identifier"},
+                "change_type": {"type": "string", "enum": ["bugfix", "refactor", "feature", "milestone", "config", "other"], "description": "Filter by change type"},
+                "date_from": {"type": "string", "description": "Start date filter (YYYY-MM-DD)"},
+                "date_to": {"type": "string", "description": "End date filter (YYYY-MM-DD)"}
+            },
+            "required": ["project"]
+        }
+    },
+    {
+        "name": "get_change_history",
+        "description": "Get full history for one change including timeline steps.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "change_key": {"type": "string", "description": "The key of the change to retrieve"},
+                "project": {"type": "string", "description": "Project identifier"}
+            },
+            "required": ["change_key", "project"]
+        }
+    },
+    {
+        "name": "search_project_changes",
+        "description": "FTS search across project change summaries. Optionally scope to a project or change type.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Search query text"},
+                "project": {"type": "string", "description": "Optional project to scope search"},
+                "change_type": {"type": "string", "enum": ["bugfix", "refactor", "feature", "milestone", "config", "other"], "description": "Optional change type filter"}
+            },
+            "required": ["query"]
+        }
     }
 ]
