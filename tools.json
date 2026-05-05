@@ -185,13 +185,15 @@
     },
     {
         "name": "query_context",
-        "description": "Query stored context using keyword search or direct key lookup. Key resolution checks canonical keys first, then aliases. Returns matching entries from SQLite knowledge base.",
+        "description": "Query stored context using keyword search or direct key lookup. Key resolution checks canonical keys first, then aliases. Omit project for cross-project search. Returns matching entries from SQLite knowledge base.",
         "inputSchema": {
             "type": "object",
             "properties": {
-                "project": {"type": "string", "default": "default", "description": "Project identifier to filter results"},
+                "project": {"type": "string", "description": "Project identifier to filter results. Omit for cross-project search."},
                 "keyword": {"type": "string", "description": "Keyword to search across all stored context (full-text search)"},
-                "key": {"type": "string", "description": "Direct key lookup — resolves via canonical key or alias (alternative to keyword)"}
+                "key": {"type": "string", "description": "Direct key lookup — resolves via canonical key or alias (alternative to keyword)"},
+                "limit": {"type": "integer", "default": 20, "description": "Maximum number of results to return"},
+                "sort_by": {"type": "string", "enum": ["updated_at", "key"], "default": "updated_at", "description": "Sort order: updated_at (descending) or key (ascending)"}
             }
         }
     },
