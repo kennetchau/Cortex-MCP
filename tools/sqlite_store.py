@@ -199,6 +199,12 @@ def _init_db(conn: sqlite3.Connection):
     
     conn.commit()
 
+
+def _fts_quote(term: str) -> str:
+    """Quote a term for FTS5 MATCH so special chars (like -) are treated as literals."""
+    return f'"{term}"'
+
+
 def _resolve_key(conn: sqlite3.Connection, key: str, project: str):
     """Resolve a key to its canonical context entry.
     
@@ -302,12 +308,15 @@ async def handle_query_context(request_id: str, args: dict, _tool_response, logg
         
         if keyword:
             # Full-text search scoped to project
+            # Wrap in double quotes so FTS5 treats special chars (like -) as literals
+            # e.g., "mcp-server" won't be parsed as "mcp -server" (exclude server)
+            quoted_keyword = f'"{keyword}"'
             cursor.execute(
                 """SELECT c.key, c.content, c.updated_at 
                    FROM context c 
                    JOIN context_fts f ON c.id = f.rowid 
                    WHERE context_fts MATCH ? AND c.project = ?""",
-                (keyword, resolved_project)
+                (quoted_keyword, resolved_project)
             )
             rows = cursor.fetchall()
             for row in rows:
@@ -702,7 +711,8 @@ async def handle_search_project_changes(request_id: str, args: dict, _tool_respo
         _init_db(conn)
         cursor = conn.cursor()
         
-        # FTS search on summary
+        # FTS search on summary — quote to handle special chars like - in project names
+        quoted_query = _fts_quote(query_text)
         if project and change_type:
             cursor.execute(
                 """SELECT pc.project, pc.key, pc.change_type, pc.summary, pc.created_at
@@ -710,7 +720,7 @@ async def handle_search_project_changes(request_id: str, args: dict, _tool_respo
                    JOIN project_changes_fts pcf ON pc.id = pcf.rowid
                    WHERE project_changes_fts MATCH ? AND pc.project = ? AND pc.change_type = ?
                    ORDER BY pcf.rank""",
-                (query_text, project, change_type)
+                (quoted_query, project, change_type)
             )
         elif project:
             cursor.execute(
@@ -719,7 +729,7 @@ async def handle_search_project_changes(request_id: str, args: dict, _tool_respo
                    JOIN project_changes_fts pcf ON pc.id = pcf.rowid
                    WHERE project_changes_fts MATCH ? AND pc.project = ?
                    ORDER BY pcf.rank""",
-                (query_text, project)
+                (quoted_query, project)
             )
         else:
             cursor.execute(
@@ -728,7 +738,7 @@ async def handle_search_project_changes(request_id: str, args: dict, _tool_respo
                    JOIN project_changes_fts pcf ON pc.id = pcf.rowid
                    WHERE project_changes_fts MATCH ?
                    ORDER BY pcf.rank""",
-                (query_text,)
+                (quoted_query,)
             )
         
         rows = cursor.fetchall()
