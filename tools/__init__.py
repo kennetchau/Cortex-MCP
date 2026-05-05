@@ -26,6 +26,10 @@ from .sqlite_store import (
     handle_list_project_changes,
     handle_get_change_history,
     handle_search_project_changes,
+    handle_store_issue,
+    handle_query_issues,
+    handle_update_issue_status,
+    handle_list_issues,
 )
 
 __all__ = [
@@ -54,4 +58,8 @@ __all__ = [
     "handle_list_project_changes",
     "handle_get_change_history",
     "handle_search_project_changes",
+    "handle_store_issue",
+    "handle_query_issues",
+    "handle_update_issue_status",
+    "handle_list_issues",
 ]

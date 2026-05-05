@@ -197,6 +197,35 @@ def _init_db(conn: sqlite3.Connection):
         END
     """)
     
+    # ─── Issues Tables ────────────────────────────────────────────────
+
+    # Main issues table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS issues (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project TEXT NOT NULL,
+            key TEXT NOT NULL,
+            status TEXT NOT NULL CHECK(status IN ('open', 'closed', 'not-relevant')),
+            title TEXT NOT NULL,
+            description TEXT,
+            fixed_in_commit TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(project, key)
+        )
+    """)
+
+    # Junction table — many-to-many between issues and project changes
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS issue_change_links (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            issue_id INTEGER NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+            change_id INTEGER NOT NULL REFERENCES project_changes(id) ON DELETE CASCADE,
+            linked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(issue_id, change_id)
+        )
+    """)
+    
     conn.commit()
 
 
@@ -805,3 +834,237 @@ async def handle_search_project_changes(request_id: str, args: dict, _tool_respo
         if logger:
             logger.error(f"search_project_changes failed: {e}")
         return _tool_response(request_id, f"Error searching project changes: {str(e)}")
+
+# ─── Issues Handlers ────────────────────────────────────────────────
+
+async def handle_store_issue(request_id: str, args: dict, _tool_response, logger=None, **kwargs) -> dict:
+    """Store or update an issue in the issues table."""
+    project = args.get("project", None)
+    key = args.get("key", "")
+    status = args.get("status", "open")
+    title = args.get("title", "")
+    description = args.get("description", "")
+    fixed_in_commit = args.get("fixed_in_commit", None)
+
+    if not key or not title:
+        return _tool_response(request_id, "Error: 'key' and 'title' are required.")
+
+    valid_statuses = ("open", "closed", "not-relevant")
+    if status not in valid_statuses:
+        return _tool_response(request_id, f"Error: 'status' must be one of: {', '.join(valid_statuses)}")
+
+    # Resolve project ID
+    if project and project != "default":
+        resolved_project = project
+    else:
+        resolved_project = _detect_project_id()
+
+    try:
+        db_path = _get_db_path()
+        conn = sqlite3.connect(db_path)
+        _init_db(conn)
+        cursor = conn.cursor()
+
+        # Check if issue already exists
+        cursor.execute(
+            "SELECT id FROM issues WHERE project = ? AND key = ?",
+            (resolved_project, key)
+        )
+        existing = cursor.fetchone()
+
+        if existing:
+            cursor.execute("""
+                UPDATE issues 
+                SET status = ?, title = ?, description = ?, fixed_in_commit = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, (status, title, description, fixed_in_commit, existing[0]))
+            action = "Updated"
+        else:
+            cursor.execute("""
+                INSERT INTO issues (project, key, status, title, description, fixed_in_commit)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (resolved_project, key, status, title, description, fixed_in_commit))
+            action = "Stored"
+
+        conn.commit()
+        conn.close()
+
+        return _tool_response(request_id, f"{action} issue '{key}' for project '{resolved_project}' (status: {status}).")
+
+    except Exception as e:
+        if logger:
+            logger.error(f"store_issue failed: {e}")
+        return _tool_response(request_id, f"Error storing issue: {str(e)}")
+
+
+async def handle_query_issues(request_id: str, args: dict, _tool_response, logger=None, **kwargs) -> dict:
+    """Query issues with optional filters by project, status, or key."""
+    project_arg = args.get("project", None)
+    status_filter = args.get("status", None)
+    key_filter = args.get("key", None)
+
+    # Resolve project ID
+    if project_arg and project_arg != "default":
+        resolved_project = project_arg
+    elif project_arg is None or project_arg == "":
+        resolved_project = None  # Cross-project query
+    else:
+        resolved_project = _detect_project_id()
+
+    try:
+        db_path = _get_db_path()
+        conn = sqlite3.connect(db_path)
+        _init_db(conn)
+        cursor = conn.cursor()
+
+        query = """
+            SELECT i.project, i.key, i.status, i.title, i.description, 
+                   i.fixed_in_commit, i.created_at,
+                   (SELECT COUNT(*) FROM issue_change_links WHERE issue_id = i.id) as related_changes
+            FROM issues i
+            WHERE 1=1
+        """
+        params = []
+
+        if resolved_project:
+            query += " AND i.project = ?"
+            params.append(resolved_project)
+        if status_filter:
+            query += " AND i.status = ?"
+            params.append(status_filter)
+        if key_filter:
+            query += " AND i.key = ?"
+            params.append(key_filter)
+
+        query += " ORDER BY i.created_at DESC"
+
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        conn.close()
+
+        if not rows:
+            filters = []
+            if resolved_project:
+                filters.append(f"project='{resolved_project}'")
+            if status_filter:
+                filters.append(f"status='{status_filter}'")
+            if key_filter:
+                filters.append(f"key='{key_filter}'")
+            filter_str = ", ".join(filters) if filters else "no filters"
+            return _tool_response(request_id, f"No issues found ({filter_str}).")
+
+        formatted = "\n".join([
+            f"- [{row[0]}] [{row[2]}] {row[1]} — {row[3]}"
+            + (f" (fixed in {row[5]})" if row[5] else "")
+            + f" | related changes: {row[7]}"
+            for row in rows
+        ])
+
+        return _tool_response(request_id, f"Issues ({len(rows)}):\n{formatted}")
+
+    except Exception as e:
+        if logger:
+            logger.error(f"query_issues failed: {e}")
+        return _tool_response(request_id, f"Error querying issues: {str(e)}")
+
+
+async def handle_update_issue_status(request_id: str, args: dict, _tool_response, logger=None, **kwargs) -> dict:
+    """Update the status of an existing issue."""
+    project = args.get("project", None)
+    key = args.get("key", "")
+    new_status = args.get("status", None)
+
+    if not key or not new_status:
+        return _tool_response(request_id, "Error: 'key' and 'status' are required.")
+
+    valid_statuses = ("open", "closed", "not-relevant")
+    if new_status not in valid_statuses:
+        return _tool_response(request_id, f"Error: 'status' must be one of: {', '.join(valid_statuses)}")
+
+    # Resolve project ID
+    if project and project != "default":
+        resolved_project = project
+    else:
+        resolved_project = _detect_project_id()
+
+    try:
+        db_path = _get_db_path()
+        conn = sqlite3.connect(db_path)
+        _init_db(conn)
+        cursor = conn.cursor()
+
+        # Find the issue
+        cursor.execute(
+            "SELECT id, status FROM issues WHERE project = ? AND key = ?",
+            (resolved_project, key)
+        )
+        row = cursor.fetchone()
+
+        if not row:
+            conn.close()
+            return _tool_response(request_id, f"Issue '{key}' not found for project '{resolved_project}'.")
+
+        old_status = row[1]
+        issue_id = row[0]
+
+        cursor.execute(
+            "UPDATE issues SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (new_status, issue_id)
+        )
+        conn.commit()
+        conn.close()
+
+        return _tool_response(request_id, f"Issue '{key}' status changed: '{old_status}' → '{new_status}'.")
+
+    except Exception as e:
+        if logger:
+            logger.error(f"update_issue_status failed: {e}")
+        return _tool_response(request_id, f"Error updating issue status: {str(e)}")
+
+
+async def handle_list_issues(request_id: str, args: dict, _tool_response, logger=None, **kwargs) -> dict:
+    """List all issues with optional filters by project and status."""
+    project_arg = args.get("project", None)
+    status_filter = args.get("status", None)
+
+    # Resolve project ID
+    if project_arg and project_arg != "default":
+        resolved_project = project_arg
+    elif project_arg is None or project_arg == "":
+        resolved_project = _detect_project_id()
+    else:
+        resolved_project = _detect_project_id()
+
+    try:
+        db_path = _get_db_path()
+        conn = sqlite3.connect(db_path)
+        _init_db(conn)
+        cursor = conn.cursor()
+
+        query = "SELECT id, key, status, title, created_at FROM issues WHERE project = ?"
+        params = [resolved_project]
+
+        if status_filter:
+            query += " AND status = ?"
+            params.append(status_filter)
+
+        query += " ORDER BY created_at DESC"
+
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        conn.close()
+
+        if not rows:
+            return _tool_response(request_id, f"No issues found for project '{resolved_project}'.")
+
+        formatted = "\n".join([
+            f"- [{row[2]}] {row[1]} — {row[3]} (created: {row[4]})"
+            for row in rows
+        ])
+
+        return _tool_response(request_id, f"Issues for '{resolved_project}' ({len(rows)}):\n{formatted}")
+
+    except Exception as e:
+        if logger:
+            logger.error(f"list_issues failed: {e}")
+        return _tool_response(request_id, f"Error listing issues: {str(e)}")

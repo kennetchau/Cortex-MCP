@@ -43,6 +43,10 @@ A modular Model Context Protocol (MCP) server built with FastAPI, providing tool
 | `list_project_changes` | List changes for a project with filters by type and date range |
 | `get_change_history` | Get full history for one change including timeline steps |
 | `search_project_changes` | FTS search across project change summaries |
+| `store_issue` | Store or update an issue with status, title, description, commit link |
+| `query_issues` | Query issues filtered by project, status, or key |
+| `update_issue_status` | Transition issue status (open → closed / not-relevant) |
+| `list_issues` | List all issues for a project, optionally filtered by status |
 
 ## Installation
 
@@ -85,7 +89,7 @@ cp .env.example .env
 
 ## Architecture
 
-The server implements the [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) using JSON-RPC 2.0 over HTTP. It exposes **26 tools** organized into logical modules.
+The server implements the [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) using JSON-RPC 2.0 over HTTP. It exposes **30 tools** organized into logical modules.
 
 ### Directory Structure
 
@@ -166,6 +170,31 @@ A structured changelog system for tracking work progress, bugs fixed, refactors 
 | `search_project_changes` | Full-text search across change summaries (optionally scoped to project or type) |
 
 ## Todo Project Pattern
+## Issues Tracker
+
+A structured system for tracking bugs and observations with lifecycle status. Issues link to project changes via a many-to-many junction table.
+
+### Storing an Issue
+
+```json
+{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"store_issue","arguments":{"project":"mcp-server","key":"db-path-race","status":"open","title":"DB_PATH singleton race condition","description":"Module-level DB_PATH=None global causes duplicate connections under concurrent requests."}}}
+```
+
+### Updating Status
+
+```json
+{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"update_issue_status","arguments":{"project":"mcp-server","key":"db-path-race","status":"closed"}}}
+```
+
+### Querying Issues
+
+| Tool | Purpose |
+|------|---------|
+| `query_issues` | Filter by project, status, or exact key; shows related change count |
+| `list_issues` | List all issues for a project with optional status filter |
+
+Status values: `open`, `closed`, `not-relevant`. The `issue_change_links` junction table tracks which project changes relate to which issues (many-to-many).
+
 
 The `todo` project is used as a task list. Use descriptive keys so tasks are findable:
 
