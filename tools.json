@@ -2,15 +2,28 @@
     {
         "name": "today",
         "description": "Get todays date, and time",
-        "inputSchema": {"type": "object", "properties": {}}
+        "inputSchema": {
+            "type": "object",
+            "properties": {}
+        }
     },
     {
         "name": "add",
         "description": "Adds two numbers together",
         "inputSchema": {
             "type": "object",
-            "properties": {"a": {"type": "number"}, "b": {"type": "number"}},
-            "required": ["a", "b"]
+            "properties": {
+                "a": {
+                    "type": "number"
+                },
+                "b": {
+                    "type": "number"
+                }
+            },
+            "required": [
+                "a",
+                "b"
+            ]
         }
     },
     {
@@ -18,8 +31,15 @@
         "description": "Search the live web for current information, news, or facts.",
         "inputSchema": {
             "type": "object",
-            "properties": {"query": {"type": "string", "description": "The search query"}},
-            "required": ["query"]
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "The search query"
+                }
+            },
+            "required": [
+                "query"
+            ]
         }
     },
     {
@@ -27,8 +47,15 @@
         "description": "Scrape a URL, extract main content, and return a clean text summary.",
         "inputSchema": {
             "type": "object",
-            "properties": {"url": {"type": "string", "description": "The URL to scrape"}},
-            "required": ["url"]
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": "The URL to scrape"
+                }
+            },
+            "required": [
+                "url"
+            ]
         }
     },
     {
@@ -37,10 +64,19 @@
         "inputSchema": {
             "type": "object",
             "properties": {
-                "path": {"type": "string", "description": "Absolute or relative path to list"},
-                "recursive": {"type": "boolean", "default": false, "description": "If true, show a recursive tree view of all subdirectories"}
+                "path": {
+                    "type": "string",
+                    "description": "Absolute or relative path to list"
+                },
+                "recursive": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "If true, show a recursive tree view of all subdirectories"
+                }
             },
-            "required": ["path"]
+            "required": [
+                "path"
+            ]
         }
     },
     {
@@ -49,11 +85,24 @@
         "inputSchema": {
             "type": "object",
             "properties": {
-                "path": {"type": "string", "description": "Path to the file (relative to the sandbox base)"},
-                "line_start": {"type": "integer", "default": 1, "description": "Starting line number (1-indexed). Use negative values to count from end."},
-                "line_count": {"type": "integer", "default": 50, "description": "Number of lines to read"}
+                "path": {
+                    "type": "string",
+                    "description": "Path to the file (relative to the sandbox base)"
+                },
+                "line_start": {
+                    "type": "integer",
+                    "default": 1,
+                    "description": "Starting line number (1-indexed). Use negative values to count from end."
+                },
+                "line_count": {
+                    "type": "integer",
+                    "default": 50,
+                    "description": "Number of lines to read"
+                }
             },
-            "required": ["path"]
+            "required": [
+                "path"
+            ]
         }
     },
     {
@@ -62,10 +111,19 @@
         "inputSchema": {
             "type": "object",
             "properties": {
-                "path": {"type": "string", "description": "Path where file will be written"},
-                "content": {"type": "string", "description": "Text content to write"}
+                "path": {
+                    "type": "string",
+                    "description": "Path where file will be written"
+                },
+                "content": {
+                    "type": "string",
+                    "description": "Text content to write"
+                }
             },
-            "required": ["path", "content"]
+            "required": [
+                "path",
+                "content"
+            ]
         }
     },
     {
@@ -74,10 +132,19 @@
         "inputSchema": {
             "type": "object",
             "properties": {
-                "path": {"type": "string", "description": "Path to the file"},
-                "content": {"type": "string", "description": "Text to append to the file"}
+                "path": {
+                    "type": "string",
+                    "description": "Path to the file"
+                },
+                "content": {
+                    "type": "string",
+                    "description": "Text to append to the file"
+                }
             },
-            "required": ["path", "content"]
+            "required": [
+                "path",
+                "content"
+            ]
         }
     },
     {
@@ -86,11 +153,24 @@
         "inputSchema": {
             "type": "object",
             "properties": {
-                "path": {"type": "string", "description": "Path to the file"},
-                "old_text": {"type": "string", "description": "Text to find in the file"},
-                "new_text": {"type": "string", "description": "Replacement text"}
+                "path": {
+                    "type": "string",
+                    "description": "Path to the file"
+                },
+                "old_text": {
+                    "type": "string",
+                    "description": "Text to find in the file"
+                },
+                "new_text": {
+                    "type": "string",
+                    "description": "Replacement text"
+                }
             },
-            "required": ["path", "old_text", "new_text"]
+            "required": [
+                "path",
+                "old_text",
+                "new_text"
+            ]
         }
     },
     {
@@ -99,11 +179,24 @@
         "inputSchema": {
             "type": "object",
             "properties": {
-                "path": {"type": "string", "description": "Path to the file"},
-                "marker": {"type": "string", "description": "Line content to search for"},
-                "content": {"type": "string", "description": "Text to insert after the marker"}
+                "path": {
+                    "type": "string",
+                    "description": "Path to the file"
+                },
+                "marker": {
+                    "type": "string",
+                    "description": "Line content to search for"
+                },
+                "content": {
+                    "type": "string",
+                    "description": "Text to insert after the marker"
+                }
             },
-            "required": ["path", "marker", "content"]
+            "required": [
+                "path",
+                "marker",
+                "content"
+            ]
         }
     },
     {
@@ -112,12 +205,33 @@
         "inputSchema": {
             "type": "object",
             "properties": {
-                "query": {"type": "string", "description": "Text or regex pattern to search for"},
-                "path": {"type": "string", "default": ".", "description": "Directory path to search in (relative to the sandbox base)"},
-                "pattern_type": {"type": "string", "default": "exact", "enum": ["exact", "regex"], "description": "Whether to treat query as exact text or regex pattern"},
-                "max_results": {"type": "integer", "default": 20, "description": "Maximum number of results to return"}
+                "query": {
+                    "type": "string",
+                    "description": "Text or regex pattern to search for"
+                },
+                "path": {
+                    "type": "string",
+                    "default": ".",
+                    "description": "Directory path to search in (relative to the sandbox base)"
+                },
+                "pattern_type": {
+                    "type": "string",
+                    "default": "exact",
+                    "enum": [
+                        "exact",
+                        "regex"
+                    ],
+                    "description": "Whether to treat query as exact text or regex pattern"
+                },
+                "max_results": {
+                    "type": "integer",
+                    "default": 20,
+                    "description": "Maximum number of results to return"
+                }
             },
-            "required": ["query"]
+            "required": [
+                "query"
+            ]
         }
     },
     {
@@ -126,12 +240,29 @@
         "inputSchema": {
             "type": "object",
             "properties": {
-                "command": {"type": "string", "description": "Shell command to execute"},
-                "cwd": {"type": "string", "default": ".", "description": "Working directory (relative to sandbox root)"},
-                "timeout": {"type": "integer", "default": 15, "description": "Max seconds to wait"},
-                "max_output": {"type": "integer", "default": 5000, "description": "Max characters of stdout/stderr to return"}
+                "command": {
+                    "type": "string",
+                    "description": "Shell command to execute"
+                },
+                "cwd": {
+                    "type": "string",
+                    "default": ".",
+                    "description": "Working directory (relative to sandbox root)"
+                },
+                "timeout": {
+                    "type": "integer",
+                    "default": 15,
+                    "description": "Max seconds to wait"
+                },
+                "max_output": {
+                    "type": "integer",
+                    "default": 5000,
+                    "description": "Max characters of stdout/stderr to return"
+                }
             },
-            "required": ["command"]
+            "required": [
+                "command"
+            ]
         }
     },
     {
@@ -140,11 +271,22 @@
         "inputSchema": {
             "type": "object",
             "properties": {
-                "source_path": {"type": "string", "description": "Path to the source Markdown file (relative to the sandbox base)"},
-                "output_path": {"type": "string", "description": "Path for the output PDF (defaults to same name with .pdf extension)"},
-                "css_path": {"type": "string", "description": "Optional path to a custom CSS stylesheet (relative to the sandbox base)"}
+                "source_path": {
+                    "type": "string",
+                    "description": "Path to the source Markdown file (relative to the sandbox base)"
+                },
+                "output_path": {
+                    "type": "string",
+                    "description": "Path for the output PDF (defaults to same name with .pdf extension)"
+                },
+                "css_path": {
+                    "type": "string",
+                    "description": "Optional path to a custom CSS stylesheet (relative to the sandbox base)"
+                }
             },
-            "required": ["source_path"]
+            "required": [
+                "source_path"
+            ]
         }
     },
     {
@@ -153,9 +295,14 @@
         "inputSchema": {
             "type": "object",
             "properties": {
-                "path": {"type": "string", "description": "Path to the file to delete (relative to the sandbox base)"}
+                "path": {
+                    "type": "string",
+                    "description": "Path to the file to delete (relative to the sandbox base)"
+                }
             },
-            "required": ["path"]
+            "required": [
+                "path"
+            ]
         }
     },
     {
@@ -164,10 +311,19 @@
         "inputSchema": {
             "type": "object",
             "properties": {
-                "path": {"type": "string", "description": "Path to the directory to remove (relative to the sandbox base)"},
-                "recursive": {"type": "boolean", "default": false, "description": "If true, removes directory and all contents recursively"}
+                "path": {
+                    "type": "string",
+                    "description": "Path to the directory to remove (relative to the sandbox base)"
+                },
+                "recursive": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "If true, removes directory and all contents recursively"
+                }
             },
-            "required": ["path"]
+            "required": [
+                "path"
+            ]
         }
     },
     {
@@ -176,11 +332,24 @@
         "inputSchema": {
             "type": "object",
             "properties": {
-                "key": {"type": "string", "description": "Identifier for this context entry (e.g., 'auth-flow', 'known-issues')"},
-                "content": {"type": "string", "description": "The actual context content to store"},
-                "project": {"type": "string", "default": "default", "description": "Project identifier to scope the context"}
+                "key": {
+                    "type": "string",
+                    "description": "Identifier for this context entry (e.g., 'auth-flow', 'known-issues')"
+                },
+                "content": {
+                    "type": "string",
+                    "description": "The actual context content to store"
+                },
+                "project": {
+                    "type": "string",
+                    "default": "default",
+                    "description": "Project identifier to scope the context"
+                }
             },
-            "required": ["key", "content"]
+            "required": [
+                "key",
+                "content"
+            ]
         }
     },
     {
@@ -189,22 +358,50 @@
         "inputSchema": {
             "type": "object",
             "properties": {
-                "project": {"type": "string", "description": "Project identifier to filter results. Omit for cross-project search."},
-                "keyword": {"type": "string", "description": "Keyword to search across all stored context (full-text search)"},
-                "key": {"type": "string", "description": "Direct key lookup — resolves via canonical key or alias (alternative to keyword)"},
-                "limit": {"type": "integer", "default": 20, "description": "Maximum number of results to return"},
-                "sort_by": {"type": "string", "enum": ["updated_at", "key"], "default": "updated_at", "description": "Sort order: updated_at (descending) or key (ascending)"}
+                "project": {
+                    "type": "string",
+                    "description": "Project identifier to filter results. Omit for cross-project search."
+                },
+                "keyword": {
+                    "type": "string",
+                    "description": "Keyword to search across all stored context (full-text search)"
+                },
+                "key": {
+                    "type": "string",
+                    "description": "Direct key lookup \u2014 resolves via canonical key or alias (alternative to keyword)"
+                },
+                "limit": {
+                    "type": "integer",
+                    "default": 20,
+                    "description": "Maximum number of results to return"
+                },
+                "sort_by": {
+                    "type": "string",
+                    "enum": [
+                        "updated_at",
+                        "key"
+                    ],
+                    "default": "updated_at",
+                    "description": "Sort order: updated_at (descending) or key (ascending)"
+                }
             }
         }
     },
-   {
+    {
         "name": "clear_context",
         "description": "Clear stored context entries. Either a specific key or all entries for a project. Keys resolve via canonical name or alias.",
         "inputSchema": {
             "type": "object",
             "properties": {
-                "project": {"type": "string", "default": "default", "description": "Project identifier to clear"},
-                "key": {"type": "string", "description": "Specific key to clear — resolves via canonical name or alias (omit to clear entire project)"}
+                "project": {
+                    "type": "string",
+                    "default": "default",
+                    "description": "Project identifier to clear"
+                },
+                "key": {
+                    "type": "string",
+                    "description": "Specific key to clear \u2014 resolves via canonical name or alias (omit to clear entire project)"
+                }
             }
         }
     },
@@ -214,11 +411,24 @@
         "inputSchema": {
             "type": "object",
             "properties": {
-                "context_key": {"type": "string", "description": "The canonical key of the context entry to alias"},
-                "alias_name": {"type": "string", "description": "The alternate name to register as an alias"},
-                "project": {"type": "string", "default": "default", "description": "Project identifier to scope the alias"}
+                "context_key": {
+                    "type": "string",
+                    "description": "The canonical key of the context entry to alias"
+                },
+                "alias_name": {
+                    "type": "string",
+                    "description": "The alternate name to register as an alias"
+                },
+                "project": {
+                    "type": "string",
+                    "default": "default",
+                    "description": "Project identifier to scope the alias"
+                }
             },
-            "required": ["context_key", "alias_name"]
+            "required": [
+                "context_key",
+                "alias_name"
+            ]
         }
     },
     {
@@ -235,12 +445,37 @@
         "inputSchema": {
             "type": "object",
             "properties": {
-                "project": {"type": "string", "description": "Project identifier (e.g., 'mcp-server', 'bob')"},
-                "key": {"type": "string", "description": "Human-readable sub-key within project (e.g., 'fix-context-list')"},
-                "change_type": {"type": "string", "enum": ["bugfix", "refactor", "feature", "milestone", "config", "other"], "description": "Category of change"},
-                "summary": {"type": "string", "description": "One-line description of what changed"}
+                "project": {
+                    "type": "string",
+                    "description": "Project identifier (e.g., 'mcp-server', 'bob')"
+                },
+                "key": {
+                    "type": "string",
+                    "description": "Human-readable sub-key within project (e.g., 'fix-context-list')"
+                },
+                "change_type": {
+                    "type": "string",
+                    "enum": [
+                        "bugfix",
+                        "refactor",
+                        "feature",
+                        "milestone",
+                        "config",
+                        "other"
+                    ],
+                    "description": "Category of change"
+                },
+                "summary": {
+                    "type": "string",
+                    "description": "One-line description of what changed"
+                }
             },
-            "required": ["project", "key", "change_type", "summary"]
+            "required": [
+                "project",
+                "key",
+                "change_type",
+                "summary"
+            ]
         }
     },
     {
@@ -249,14 +484,37 @@
         "inputSchema": {
             "type": "object",
             "properties": {
-                "change_key": {"type": "string", "description": "The key of the change to add a step to"},
-                "project": {"type": "string", "description": "Project identifier"},
-                "step": {"type": "string", "description": "Stage name (e.g., 'identified root cause', 'implemented fix', 'tested')"},
-                "date": {"type": "string", "description": "Date this step occurred (YYYY-MM-DD)"},
-                "details": {"type": "string", "description": "Detailed description of what happened"},
-                "files_changed": {"type": "string", "description": "Comma-separated file paths or JSON array"}
+                "change_key": {
+                    "type": "string",
+                    "description": "The key of the change to add a step to"
+                },
+                "project": {
+                    "type": "string",
+                    "description": "Project identifier"
+                },
+                "step": {
+                    "type": "string",
+                    "description": "Stage name (e.g., 'identified root cause', 'implemented fix', 'tested')"
+                },
+                "date": {
+                    "type": "string",
+                    "description": "Date this step occurred (YYYY-MM-DD)"
+                },
+                "details": {
+                    "type": "string",
+                    "description": "Detailed description of what happened"
+                },
+                "files_changed": {
+                    "type": "string",
+                    "description": "Comma-separated file paths or JSON array"
+                }
             },
-            "required": ["change_key", "project", "step", "date"]
+            "required": [
+                "change_key",
+                "project",
+                "step",
+                "date"
+            ]
         }
     },
     {
@@ -265,12 +523,34 @@
         "inputSchema": {
             "type": "object",
             "properties": {
-                "project": {"type": "string", "description": "Project identifier"},
-                "change_type": {"type": "string", "enum": ["bugfix", "refactor", "feature", "milestone", "config", "other"], "description": "Filter by change type"},
-                "date_from": {"type": "string", "description": "Start date filter (YYYY-MM-DD)"},
-                "date_to": {"type": "string", "description": "End date filter (YYYY-MM-DD)"}
+                "project": {
+                    "type": "string",
+                    "description": "Project identifier"
+                },
+                "change_type": {
+                    "type": "string",
+                    "enum": [
+                        "bugfix",
+                        "refactor",
+                        "feature",
+                        "milestone",
+                        "config",
+                        "other"
+                    ],
+                    "description": "Filter by change type"
+                },
+                "date_from": {
+                    "type": "string",
+                    "description": "Start date filter (YYYY-MM-DD)"
+                },
+                "date_to": {
+                    "type": "string",
+                    "description": "End date filter (YYYY-MM-DD)"
+                }
             },
-            "required": ["project"]
+            "required": [
+                "project"
+            ]
         }
     },
     {
@@ -279,10 +559,19 @@
         "inputSchema": {
             "type": "object",
             "properties": {
-                "change_key": {"type": "string", "description": "The key of the change to retrieve"},
-                "project": {"type": "string", "description": "Project identifier"}
+                "change_key": {
+                    "type": "string",
+                    "description": "The key of the change to retrieve"
+                },
+                "project": {
+                    "type": "string",
+                    "description": "Project identifier"
+                }
             },
-            "required": ["change_key", "project"]
+            "required": [
+                "change_key",
+                "project"
+            ]
         }
     },
     {
@@ -291,11 +580,151 @@
         "inputSchema": {
             "type": "object",
             "properties": {
-                "query": {"type": "string", "description": "Search query text"},
-                "project": {"type": "string", "description": "Optional project to scope search"},
-                "change_type": {"type": "string", "enum": ["bugfix", "refactor", "feature", "milestone", "config", "other"], "description": "Optional change type filter"}
+                "query": {
+                    "type": "string",
+                    "description": "Search query text"
+                },
+                "project": {
+                    "type": "string",
+                    "description": "Optional project to scope search"
+                },
+                "change_type": {
+                    "type": "string",
+                    "enum": [
+                        "bugfix",
+                        "refactor",
+                        "feature",
+                        "milestone",
+                        "config",
+                        "other"
+                    ],
+                    "description": "Optional change type filter"
+                }
             },
-            "required": ["query"]
+            "required": [
+                "query"
+            ]
+        }
+    },
+    {
+        "name": "store_issue",
+        "description": "Store or update an issue (project, key, status, title, description).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project": {
+                    "type": "string",
+                    "description": "Project identifier"
+                },
+                "key": {
+                    "type": "string",
+                    "description": "Issue sub-key"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "open",
+                        "closed",
+                        "not-relevant"
+                    ],
+                    "default": "open",
+                    "description": "open, closed, or not-relevant"
+                },
+                "title": {
+                    "type": "string",
+                    "description": "Short summary"
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Detailed notes"
+                },
+                "fixed_in_commit": {
+                    "type": "string",
+                    "description": "Git commit hash if resolved"
+                }
+            },
+            "required": [
+                "key",
+                "title"
+            ]
+        }
+    },
+    {
+        "name": "query_issues",
+        "description": "Query issues by project, status, or key.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project": {
+                    "type": "string",
+                    "description": "Filter by project"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "open",
+                        "closed",
+                        "not-relevant"
+                    ],
+                    "description": "Filter by status"
+                },
+                "key": {
+                    "type": "string",
+                    "description": "Exact key"
+                }
+            }
+        }
+    },
+    {
+        "name": "update_issue_status",
+        "description": "Change the status of an existing issue.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project": {
+                    "type": "string",
+                    "description": "Project identifier"
+                },
+                "key": {
+                    "type": "string",
+                    "description": "Issue sub-key"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "open",
+                        "closed",
+                        "not-relevant"
+                    ],
+                    "description": "New status: open, closed, or not-relevant"
+                }
+            },
+            "required": [
+                "key",
+                "status"
+            ]
+        }
+    },
+    {
+        "name": "list_issues",
+        "description": "List all issues for a project with optional status filter.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project": {
+                    "type": "string",
+                    "description": "Project identifier"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "open",
+                        "closed",
+                        "not-relevant"
+                    ],
+                    "description": "Filter by status"
+                }
+            }
         }
     }
 ]
