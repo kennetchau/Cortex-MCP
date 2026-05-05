@@ -21,6 +21,11 @@ from .sqlite_store import (
     handle_clear_context,
     handle_list_projects,
     handle_add_context_alias,
+    handle_add_project_change,
+    handle_add_change_step,
+    handle_list_project_changes,
+    handle_get_change_history,
+    handle_search_project_changes,
 )
 
 __all__ = [
@@ -44,4 +49,9 @@ __all__ = [
     "handle_clear_context",
     "handle_list_projects",
     "handle_add_context_alias",
+    "handle_add_project_change",
+    "handle_add_change_step",
+    "handle_list_project_changes",
+    "handle_get_change_history",
+    "handle_search_project_changes",
 ]
