@@ -273,14 +273,14 @@ async def handle_query_context(request_id: str, args: dict, _tool_response, logg
                         result["matched_via"] = f"alias '{key}'"
                     results.append(result)
         else:
-            # List all keys for this project
+            # List all entries for this project (include content)
             cursor.execute(
-                "SELECT key, updated_at FROM context WHERE project = ? ORDER BY updated_at DESC",
+                "SELECT key, content, updated_at FROM context WHERE project = ? ORDER BY updated_at DESC",
                 (resolved_project,)
             )
             rows = cursor.fetchall()
             for row in rows:
-                results.append({"key": row[0], "updated_at": row[1]})
+                results.append({"key": row[0], "content": row[1], "updated_at": row[2]})
         
         conn.close()
         
