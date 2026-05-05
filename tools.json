@@ -297,5 +297,57 @@
             },
             "required": ["query"]
         }
+    },
+    {
+        "name": "store_issue",
+        "description": "Store or update an issue in the issues table.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project": {"type": "string", "description": "Project identifier (auto-detects if omitted)"},
+                "key": {"type": "string", "description": "Human-readable sub-key (e.g., 'db-path-race')"},
+                "status": {"type": "string", "enum": ["open", "closed", "not-relevant"], "default": "open", "description": "Issue lifecycle state"},
+                "title": {"type": "string", "description": "Short one-line summary"},
+                "description": {"type": "string", "description": "Detailed problem statement or notes"},
+                "fixed_in_commit": {"type": "string", "description": "Git commit hash where this was resolved (if applicable)"}
+            },
+            "required": ["key", "title"]
+        }
+    },
+    {
+        "name": "query_issues",
+        "description": "Query issues with optional filters by project, status, or key.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project": {"type": "string", "description": "Filter by project (auto-detects if omitted)"},
+                "status": {"type": "string", "enum": ["open", "closed", "not-relevant"], "description": "Filter by status"},
+                "key": {"type": "string", "description": "Exact key lookup"}
+            }
+        }
+    },
+    {
+        "name": "update_issue_status",
+        "description": "Update the status of an existing issue.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project": {"type": "string", "description": "Project identifier (auto-detects if omitted)"},
+                "key": {"type": "string", "description": "Human-readable sub-key of the issue to update"},
+                "status": {"type": "string", "enum": ["open", "closed", "not-relevant"], "description": "New status value"}
+            },
+            "required": ["key", "status"]
+        }
+    },
+    {
+        "name": "list_issues",
+        "description": "List all issues for a project with optional status filter.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project": {"type": "string", "description": "Project identifier (auto-detects if omitted)"},
+                "status": {"type": "string", "enum": ["open", "closed", "not-relevant"], "description": "Filter by status"}
+            }
+        }
     }
 ]

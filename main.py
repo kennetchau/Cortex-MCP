@@ -33,6 +33,10 @@ from tools import (
     handle_list_project_changes,
     handle_get_change_history,
     handle_search_project_changes,
+    handle_store_issue,
+    handle_query_issues,
+    handle_update_issue_status,
+    handle_list_issues,
 )
 from tools.web_research import scrape_and_summarize
 
@@ -89,6 +93,10 @@ TOOL_HANDLERS = {
     "list_project_changes": handle_list_project_changes,
     "get_change_history": handle_get_change_history,
     "search_project_changes": handle_search_project_changes,
+    "store_issue": handle_store_issue,
+    "query_issues": handle_query_issues,
+    "update_issue_status": handle_update_issue_status,
+    "list_issues": handle_list_issues,
 }
 
 # Isolated tool dispatcher
