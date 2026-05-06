@@ -726,5 +726,30 @@
                 }
             }
         }
+    },
+    {
+        "name": "update_issue_project",
+        "description": "Move an issue from one project to another (change ownership).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project": {
+                    "type": "string",
+                    "description": "Current project identifier"
+                },
+                "new_project": {
+                    "type": "string",
+                    "description": "New project identifier to move the issue to"
+                },
+                "key": {
+                    "type": "string",
+                    "description": "Issue sub-key"
+                }
+            },
+            "required": [
+                "new_project",
+                "key"
+            ]
+        }
     }
 ]
