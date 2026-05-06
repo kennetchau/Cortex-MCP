@@ -30,6 +30,7 @@ from .sqlite_store import (
     handle_query_issues,
     handle_update_issue_status,
     handle_list_issues,
+    handle_update_issue_project,
 )
 
 __all__ = [
@@ -62,4 +63,5 @@ __all__ = [
     "handle_query_issues",
     "handle_update_issue_status",
     "handle_list_issues",
+    "handle_update_issue_project",
 ]

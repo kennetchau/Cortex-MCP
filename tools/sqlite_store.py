@@ -210,10 +210,15 @@ def _init_db(conn: sqlite3.Connection):
             description TEXT,
             fixed_in_commit TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(project, key)
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+
+    # Migration: drop UNIQUE(project, key) constraint if it exists (v2 schema)
+    try:
+        cursor.execute("DROP INDEX IF EXISTS sqlite_autoindex_issues_1")
+    except Exception:
+        pass
 
     # Junction table — many-to-many between issues and project changes
     cursor.execute("""
@@ -1068,3 +1073,52 @@ async def handle_list_issues(request_id: str, args: dict, _tool_response, logger
         if logger:
             logger.error(f"list_issues failed: {e}")
         return _tool_response(request_id, f"Error listing issues: {str(e)}")
+
+async def handle_update_issue_project(request_id: str, args: dict, _tool_response, logger=None, **kwargs) -> dict:
+    """Change the project ownership of an existing issue."""
+    old_project = args.get("project", None)
+    new_project = args.get("new_project", "")
+    key = args.get("key", "")
+
+    if not key or not new_project:
+        return _tool_response(request_id, "Error: 'key' and 'new_project' are required.")
+
+    # Resolve old project ID
+    if old_project and old_project != "default":
+        resolved_old_project = old_project
+    else:
+        resolved_old_project = _detect_project_id()
+
+    try:
+        db_path = _get_db_path()
+        conn = sqlite3.connect(db_path)
+        _init_db(conn)
+        cursor = conn.cursor()
+
+        # Find the issue
+        cursor.execute(
+            "SELECT id FROM issues WHERE project = ? AND key = ?",
+            (resolved_old_project, key)
+        )
+        row = cursor.fetchone()
+
+        if not row:
+            conn.close()
+            return _tool_response(request_id, f"Issue '{key}' not found in project '{resolved_old_project}'.")
+
+        issue_id = row[0]
+
+        # Update the project
+        cursor.execute(
+            "UPDATE issues SET project = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (new_project, issue_id)
+        )
+        conn.commit()
+        conn.close()
+
+        return _tool_response(request_id, f"Issue '{key}' moved from '{resolved_old_project}' → '{new_project}'.")
+
+    except Exception as e:
+        if logger:
+            logger.error(f"update_issue_project failed: {e}")
+        return _tool_response(request_id, f"Error updating issue project: {str(e)}")
