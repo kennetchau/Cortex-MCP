@@ -47,6 +47,7 @@ A modular Model Context Protocol (MCP) server built with FastAPI, providing tool
 | `query_issues` | Query issues filtered by project, status, or key |
 | `update_issue_status` | Transition issue status (open → closed / not-relevant) |
 | `list_issues` | List all issues for a project, optionally filtered by status |
+| `update_issue_project` | Move an issue from one project to another (change ownership) |
 
 ## Installation
 
@@ -89,7 +90,7 @@ cp .env.example .env
 
 ## Architecture
 
-The server implements the [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) using JSON-RPC 2.0 over HTTP. It exposes **30 tools** organized into logical modules.
+The server implements the [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) using JSON-RPC 2.0 over HTTP. It exposes **31 tools** organized into logical modules.
 
 ### Directory Structure
 
