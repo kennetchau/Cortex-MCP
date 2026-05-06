@@ -37,6 +37,7 @@ from tools import (
     handle_query_issues,
     handle_update_issue_status,
     handle_list_issues,
+    handle_update_issue_project,
 )
 from tools.web_research import scrape_and_summarize
 
@@ -97,6 +98,7 @@ TOOL_HANDLERS = {
     "query_issues": handle_query_issues,
     "update_issue_status": handle_update_issue_status,
     "list_issues": handle_list_issues,
+    "update_issue_project": handle_update_issue_project,
 }
 
 # Isolated tool dispatcher
