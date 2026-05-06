@@ -10,6 +10,7 @@ Project identification:
   3. directory name (last resort)
 """
 
+import re
 import sqlite3
 from pathlib import Path
 
@@ -321,7 +322,13 @@ async def handle_store_context(request_id: str, args: dict, _tool_response, logg
 
 
 async def handle_query_context(request_id: str, args: dict, _tool_response, logger=None, **kwargs) -> dict:
-    """Query stored context using keyword search or direct key lookup."""
+    """Query stored context using keyword search or direct key lookup.
+    
+    When called with a specific key, returns that entry's full content.
+    When called with a keyword, performs FTS5 search and returns matching entries.
+    When called with no keyword and no key (list mode), returns keys + title previews
+    (first ## heading) instead of full content — use this to discover entries before fetching details.
+    """
     project_arg = args.get("project", None)
     keyword = args.get("keyword", "")
     key = args.get("key", None)
@@ -405,6 +412,8 @@ async def handle_query_context(request_id: str, args: dict, _tool_response, logg
                     results.append(result)
         else:
             # List all entries — scoped to project or global
+            # Returns keys + extracted titles (first ## heading) instead of full content
+            # so the caller can decide which entries to fetch in detail
             sort_clause = f"ORDER BY c.{sort_by} DESC" if sort_by == "key" else "ORDER BY c.updated_at DESC"
             if cross_project:
                 cursor.execute(
@@ -418,7 +427,14 @@ async def handle_query_context(request_id: str, args: dict, _tool_response, logg
                 )
             rows = cursor.fetchall()
             for row in rows:
-                results.append({"project": row[0], "key": row[1], "content": row[2], "updated_at": row[3]})
+                # Extract first ## heading as a title preview
+                content = row[2] or ""
+                match = re.search(r'^##\s+(.+)$', content, re.MULTILINE)
+                title = match.group(1).strip() if match else None
+                entry = {"project": row[0], "key": row[1], "updated_at": row[3]}
+                if title:
+                    entry["title"] = title
+                results.append(entry)
         
         conn.close()
         
@@ -427,8 +443,9 @@ async def handle_query_context(request_id: str, args: dict, _tool_response, logg
                 return _tool_response(request_id, "No context found.")
             return _tool_response(request_id, f"No context found for project '{resolved_project}'.")
         
+        # Use title (list mode) or content (search/lookup mode) for display
         formatted = "\n\n".join([
-            f"Project: {r['project']}\nKey: {r['key']}\nUpdated: {r['updated_at']}\nContent:\n{r.get('content', 'N/A')}" + (f"\nMatched via: {r['matched_via']}" if "matched_via" in r else "")
+            f"Project: {r['project']}\nKey: {r['key']}\nUpdated: {r['updated_at']}\nTitle: {r.get('title', 'N/A')}\nContent: {r.get('content', 'N/A')}" + (f"\nMatched via: {r['matched_via']}" if "matched_via" in r else "")
             for r in results
         ])
         
