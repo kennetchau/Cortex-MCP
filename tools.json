@@ -354,7 +354,7 @@
     },
     {
         "name": "query_context",
-        "description": "Query stored context using keyword search or direct key lookup. Key resolution checks canonical keys first, then aliases. Omit project for cross-project search. Returns matching entries from SQLite knowledge base.",
+        "description": "Query stored context using keyword search or direct key lookup. Key resolution checks canonical keys first, then aliases. Omit project for cross-project search. When listing all entries (no keyword/key), returns keys + title previews so caller can decide which to fetch in detail. Returns matching entries from SQLite knowledge base.",
         "inputSchema": {
             "type": "object",
             "properties": {
