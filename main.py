@@ -23,6 +23,22 @@ from tools import (
     handle_remove_directory,
     handle_run_command,
     handle_md_to_pdf,
+    handle_store_context,
+    handle_query_context,
+    handle_clear_context,
+    handle_list_projects,
+    handle_add_context_alias,
+    handle_add_project_change,
+    handle_add_change_step,
+    handle_list_project_changes,
+    handle_get_change_history,
+    handle_search_project_changes,
+    handle_store_issue,
+    handle_query_issues,
+    handle_get_issue_details,
+    handle_update_issue_status,
+    handle_list_issues,
+    handle_update_issue_project,
 )
 from tools.web_research import scrape_and_summarize
 
@@ -69,6 +85,22 @@ TOOL_HANDLERS = {
     "remove_directory": handle_remove_directory,
     "run_command": handle_run_command,
     "md_to_pdf": handle_md_to_pdf,
+    "store_context": handle_store_context,
+    "query_context": handle_query_context,
+    "clear_context": handle_clear_context,
+    "list_projects": handle_list_projects,
+    "add_context_alias": handle_add_context_alias,
+    "add_project_change": handle_add_project_change,
+    "add_change_step": handle_add_change_step,
+    "list_project_changes": handle_list_project_changes,
+    "get_change_history": handle_get_change_history,
+    "search_project_changes": handle_search_project_changes,
+    "store_issue": handle_store_issue,
+    "query_issues": handle_query_issues,
+    "get_issue_details": handle_get_issue_details,
+    "update_issue_status": handle_update_issue_status,
+    "list_issues": handle_list_issues,
+    "update_issue_project": handle_update_issue_project,
 }
 
 # Isolated tool dispatcher
@@ -138,5 +170,13 @@ async def handle_mcp(request: Request):
             })
 
 if __name__ == "__main__":
+    import argparse
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+    parser = argparse.ArgumentParser(description="MCP Server")
+    parser.add_argument("-t", "--test", action="store_true", help="Run in test mode (port 9000)")
+    args = parser.parse_args()
+
+    port = 9000 if args.test else 8000
+    print(f"Starting MCP server on port {port}...")
+    uvicorn.run(app, host="0.0.0.0", port=port)

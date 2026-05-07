@@ -15,6 +15,24 @@ from .files import (
 )
 from .run_command import handle_run_command
 from .md_to_pdf import handle_md_to_pdf
+from .sqlite_store import (
+    handle_store_context,
+    handle_query_context,
+    handle_clear_context,
+    handle_list_projects,
+    handle_add_context_alias,
+    handle_add_project_change,
+    handle_add_change_step,
+    handle_list_project_changes,
+    handle_get_change_history,
+    handle_search_project_changes,
+    handle_store_issue,
+    handle_query_issues,
+    handle_get_issue_details,
+    handle_update_issue_status,
+    handle_list_issues,
+    handle_update_issue_project,
+)
 
 __all__ = [
     "handle_today",
@@ -32,4 +50,20 @@ __all__ = [
     "handle_remove_directory",
     "handle_run_command",
     "handle_md_to_pdf",
+    "handle_store_context",
+    "handle_query_context",
+    "handle_clear_context",
+    "handle_list_projects",
+    "handle_add_context_alias",
+    "handle_add_project_change",
+    "handle_add_change_step",
+    "handle_list_project_changes",
+    "handle_get_change_history",
+    "handle_search_project_changes",
+    "handle_store_issue",
+    "handle_query_issues",
+    "handle_get_issue_details",
+    "handle_update_issue_status",
+    "handle_list_issues",
+    "handle_update_issue_project",
 ]
