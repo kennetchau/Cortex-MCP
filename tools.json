@@ -674,6 +674,27 @@
                 }
             }
         }
+    {
+        "name": "get_issue_details",
+        "description": "Get full details for a single issue by key and project.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project": {
+                    "type": "string",
+                    "description": "Project identifier"
+                },
+                "key": {
+                    "type": "string",
+                    "description": "Issue sub-key"
+                }
+            },
+            "required": [
+                "project",
+                "key"
+            ]
+        }
+    },,
     },
     {
         "name": "update_issue_status",

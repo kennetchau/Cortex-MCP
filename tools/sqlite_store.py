@@ -867,20 +867,19 @@ async def handle_add_change_step(request_id: str, args: dict, _tool_response, lo
     if not change_key or not project or not step or not date:
         return _tool_response(request_id, "Error: 'change_key', 'project', 'step', and 'date' are required.")
     
-    # Resolve project name to ID
-    cursor = conn.cursor()
-    cursor.execute("SELECT id FROM projects WHERE name = ?", (project,))
-    proj_row = cursor.fetchone()
-    if not proj_row:
-        conn.close()
-        return _tool_response(request_id, f"Project '{project}' not found.")
-    project_id = proj_row[0]
-    
     try:
         db_path = _get_db_path()
         conn = sqlite3.connect(db_path)
         _init_db(conn)
         cursor = conn.cursor()
+
+        # Resolve project name to ID
+        cursor.execute("SELECT id FROM projects WHERE name = ?", (project,))
+        proj_row = cursor.fetchone()
+        if not proj_row:
+            conn.close()
+            return _tool_response(request_id, f"Project '{project}' not found.")
+        project_id = proj_row[0]
         
         # Find the change
         cursor.execute(
@@ -1243,6 +1242,7 @@ async def handle_query_issues(request_id: str, args: dict, _tool_response, logge
             f"- [{row[0]}] [{row[2]}] {row[1]} — {row[3]}"
             + (f" (fixed in {row[5]})" if row[5] else "")
             + f" | related changes: {row[7]}"
+            + (f"\n  Desc: {row[4][:300]}{'...' if len(row[4]) > 300 else ''}" if row[4] else "")
             for row in rows
         ])
 
@@ -1253,6 +1253,61 @@ async def handle_query_issues(request_id: str, args: dict, _tool_response, logge
             logger.error(f"query_issues failed: {e}")
         return _tool_response(request_id, f"Error querying issues: {str(e)}")
 
+async def handle_get_issue_details(request_id: str, args: dict, _tool_response, logger=None, **kwargs) -> dict:
+    """Get full details for a single issue by key and project."""
+    project_name = args.get("project", None)
+    key = args.get("key", "")
+
+    if not key or not project_name:
+        return _tool_response(request_id, "Error: 'project' and 'key' are required.")
+
+    try:
+        db_path = _get_db_path()
+        conn = sqlite3.connect(db_path)
+        _init_db(conn)
+        cursor = conn.cursor()
+
+        # Resolve project ID
+        cursor.execute("SELECT id FROM projects WHERE name = ?", (project_name,))
+        row = cursor.fetchone()
+        if not row:
+            conn.close()
+            return _tool_response(request_id, f"Project '{project_name}' not found.")
+        resolved_project_id = row[0]
+
+        # Fetch full issue details
+        cursor.execute(
+            """SELECT i.key, i.status, i.title, i.description, i.fixed_in_commit, 
+                      i.created_at, i.updated_at, p.name as project,
+                      (SELECT COUNT(*) FROM issue_change_links WHERE issue_id = i.id) as related_changes
+               FROM issues i JOIN projects p ON i.project_id = p.id
+               WHERE i.project_id = ? AND i.key = ?""",
+            (resolved_project_id, key)
+        )
+        row = cursor.fetchone()
+        conn.close()
+
+        if not row:
+            return _tool_response(request_id, f"Issue '{key}' not found in project '{project_name}'.")
+
+        result = (
+            f"=== Issue: {row[0]} ===\n"
+            f"Project: {row[7]}\n"
+            f"Status: {row[1]}\n"
+            f"Title: {row[2]}\n"
+            f"Created: {row[5]}\n"
+            f"Updated: {row[6]}\n"
+            + (f"Fixed in commit: {row[4]}\n" if row[4] else "")
+            + f"Related changes: {row[8]}\n\n"
+            + (f"Description:\n{row[3]}" if row[3] else "No description.")
+        )
+
+        return _tool_response(request_id, result)
+
+    except Exception as e:
+        if logger:
+            logger.error(f"get_issue_details failed: {e}")
+        return _tool_response(request_id, f"Error fetching issue details: {str(e)}")
 
 async def handle_update_issue_status(request_id: str, args: dict, _tool_response, logger=None, **kwargs) -> dict:
     """Update the status of an existing issue."""
