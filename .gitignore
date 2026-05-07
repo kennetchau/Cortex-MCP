@@ -64,3 +64,5 @@ resources/
 .env
 # MCP context cache (SQLite database)
 .mcp_cache/
+# Migration artifacts (date-stamped folders)
+dev/
