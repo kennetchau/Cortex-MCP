@@ -176,15 +176,13 @@ def _init_legacy_schema(cursor, conn):
     cursor.execute("""
         CREATE TRIGGER IF NOT EXISTS context_ad AFTER DELETE ON context
         BEGIN
-            INSERT INTO context_fts(context_fts, rowid, key, content, project)
-            VALUES ('delete', old.id, old.key, old.content, old.project);
+            DELETE FROM context_fts WHERE rowid = old.id;
         END
     """)
     cursor.execute("""
         CREATE TRIGGER IF NOT EXISTS context_au AFTER UPDATE ON context
         BEGIN
-            INSERT INTO context_fts(context_fts, rowid, key, content, project)
-            VALUES ('delete', old.id, old.key, old.content, old.project);
+            DELETE FROM context_fts WHERE rowid = old.id;
             INSERT INTO context_fts(rowid, key, content, project)
             VALUES (new.id, new.key, new.content, new.project);
         END
@@ -321,17 +319,13 @@ def _init_migrated_schema(cursor, conn):
     cursor.execute("""
         CREATE TRIGGER context_ad AFTER DELETE ON context
         BEGIN
-            INSERT INTO context_fts(context_fts, rowid, key, content, project_name)
-            VALUES ('delete', old.id, old.key, old.content,
-                    (SELECT name FROM projects WHERE id = old.project_id));
+            DELETE FROM context_fts WHERE rowid = old.id;
         END
     """)
     cursor.execute("""
         CREATE TRIGGER context_au AFTER UPDATE ON context
         BEGIN
-            INSERT INTO context_fts(context_fts, rowid, key, content, project_name)
-            VALUES ('delete', old.id, old.key, old.content,
-                    (SELECT name FROM projects WHERE id = old.project_id));
+            DELETE FROM context_fts WHERE rowid = old.id;
             INSERT INTO context_fts(rowid, key, content, project_name)
             VALUES (new.id, new.key, new.content,
                     (SELECT name FROM projects WHERE id = new.project_id));
@@ -363,17 +357,13 @@ def _init_migrated_schema(cursor, conn):
     cursor.execute("""
         CREATE TRIGGER pc_ad AFTER DELETE ON project_changes
         BEGIN
-            INSERT INTO project_changes_fts(project_changes_fts, rowid, summary, project_name)
-            VALUES ('delete', old.id, old.summary,
-                    (SELECT name FROM projects WHERE id = old.project_id));
+            DELETE FROM project_changes_fts WHERE rowid = old.id;
         END
     """)
     cursor.execute("""
         CREATE TRIGGER pc_au AFTER UPDATE ON project_changes
         BEGIN
-            INSERT INTO project_changes_fts(project_changes_fts, rowid, summary, project_name)
-            VALUES ('delete', old.id, old.summary,
-                    (SELECT name FROM projects WHERE id = old.project_id));
+            DELETE FROM project_changes_fts WHERE rowid = old.id;
             INSERT INTO project_changes_fts(rowid, summary, project_name)
             VALUES (new.id, new.summary,
                     (SELECT name FROM projects WHERE id = new.project_id));
