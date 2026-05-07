@@ -49,15 +49,33 @@ A high-performance Model Context Protocol (MCP) engineered to transform LLMs int
 | `list_issues` | List all issues for a project, optionally filtered by status |
 | `update_issue_project` | Move an issue from one project to another (change ownership) |
 
-## Installation
+## 🛠 Installation
 
+### 1. The Standard Way
 ```bash
 # Clone the repository
 git clone <repository-url>
-cd mcp_copy
+cd Cortex-MCP
 
 # Install dependencies using uv
 uv sync
+```
+
+### 2. 👨‍🍳 The "Author's Choice" (Recommended for Security)
+For maximum isolation and a clean host OS, I recommend running Cortex-MCP inside a **Podman Toolbox**. This ensures a consistent environment for the **Bubblewrap** sandbox and prevents dependency drift.
+
+```bash
+# Create and enter a dedicated toolbox
+toolbox create -c cortex-dev
+toolbox enter -c cortex-dev
+
+# Install system dependencies & uv
+sudo dnf install bubblewrap  # If not present
+curl -LsSf https://astral.sh | sh
+
+# Sync and Run
+uv sync
+uv run main.py
 ```
 
 ## Usage
