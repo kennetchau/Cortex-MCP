@@ -60,7 +60,7 @@ uv sync
 ```
 
 ### 2. 👨‍🍳 The "Author's Choice" (Recommended for Security)
-For maximum isolation and a clean host OS, I recommend running Cortex-MCP inside a **Podman Toolbox**. This ensures a consistent environment for the **Bubblewrap** sandbox and prevents dependency drift.
+For maximum isolation and a clean host OS, I recommend running Handyman-MCP inside a **Podman Toolbox**. This ensures a consistent environment for the **Bubblewrap** sandbox and prevents dependency drift.
 
 ```bash
 # Create and enter a dedicated toolbox
