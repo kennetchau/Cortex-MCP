@@ -43,6 +43,7 @@ A high-performance Model Context Protocol (MCP) engineered to transform LLMs int
 | `search_project_changes` | FTS search across project change summaries |
 | `store_issue` | Store or update an issue with status, title, description, commit link |
 | `query_issues` | Query issues filtered by project, status, or key |
+| `get_issue_details` | Get full details for a single issue including description and commit link |
 | `update_issue_status` | Transition issue status (open → closed / not-relevant) |
 | `list_issues` | List all issues for a project, optionally filtered by status |
 | `update_issue_project` | Move an issue from one project to another (change ownership) |
@@ -106,7 +107,7 @@ cp .env.example .env
 
 ## Architecture
 
-The server implements the [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) using JSON-RPC 2.0 over HTTP. It exposes **31 tools** organized into logical modules.
+The server implements the [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) using JSON-RPC 2.0 over HTTP. It exposes **31 tools** organized into logical modules, backed by a relational SQLite store with FTS5 full-text search.
 
 ### Directory Structure
 
@@ -130,18 +131,22 @@ mcp_copy/
 ### Key Design Decisions
 
 - **Single MCP endpoint** at `POST /mcp` handling `initialize`, `tools/list`, and `tools/call` methods
+- **Decorator-based tool registration** — new handlers are auto-discovered via decorators; no manual sync across files needed
 - **tools.json as schema source** — clients discover available tools from this file
 - **Bubblewrap isolation** for `run_command` — read-only root filesystem, disposable `/tmp`, writable BASE_DIR bind mount
-- **SQLite with FTS5** for both context store and project change tracker — full-text search built in
+- **Relational SQLite store** — proper foreign keys (projects table → context/issues/project_changes), FTS5 indexes rebuilt without content= param, backward-compat views for legacy queries
+- **Auto-linking triggers** — issue_change_links junction table populated automatically when projects match
 - **Project auto-detection** — pyproject.toml → git remote → directory name fallback chain
 
 ## Persistent Context Store
 
 The `sqlite_store` module provides a cross-session knowledge base for LLM context using SQLite with FTS5 full-text search.
 
-### Project Identification
+### Project Identification & Storage
 
-Projects are auto-detected in this priority order:
+Projects are auto-detected and stored as rows in a dedicated `projects` table (INTEGER PK), referenced via foreign keys across all related tables (`context`, `issues`, `project_changes`). This eliminates fragile text comparisons and enables proper referential integrity.
+
+Detection priority:
 1. `pyproject.toml[project].name` — Python-native, structured
 2. Git remote origin URL — extracts repo name
 3. Directory name — last resort fallback
@@ -164,7 +169,11 @@ Projects are auto-detected in this priority order:
 
 ## Project Change Tracker
 
-A structured changelog system for tracking work progress, bugs fixed, refactors done, and milestones reached. Each change has timeline steps documenting what was done and when.
+A structured changelog system for tracking work progress, bugs fixed, refactors done, and milestones reached. Each change has timeline steps documenting what was done and when. Changes are stored with proper foreign key references to the `projects` table.
+
+### Auto-Linking with Issues
+
+When an issue is created or updated and a project change shares the same project name, the `issue_change_links` junction table is automatically populated via a database trigger — no manual linking needed.
 
 ### Recording a Change
 
@@ -186,7 +195,6 @@ A structured changelog system for tracking work progress, bugs fixed, refactors 
 | `get_change_history` | Get full history for one change including all timeline steps |
 | `search_project_changes` | Full-text search across change summaries (optionally scoped to project or type) |
 
-## Todo Project Pattern
 ## Issues Tracker
 
 A structured system for tracking bugs and observations with lifecycle status. Issues link to project changes via a many-to-many junction table.
@@ -207,13 +215,15 @@ A structured system for tracking bugs and observations with lifecycle status. Is
 
 | Tool | Purpose |
 |------|---------|
-| `query_issues` | Filter by project, status, or exact key; shows related change count |
+| `query_issues` | Filter by project, status, or exact key; shows truncated descriptions and related change count |
+| `get_issue_details` | Get full details for a single issue including complete description and commit link |
 | `list_issues` | List all issues for a project with optional status filter |
 
-Status values: `open`, `closed`, `not-relevant`. The `issue_change_links` junction table tracks which project changes relate to which issues (many-to-many).
+Status values: `open`, `closed`, `not-relevant`. The `issue_change_links` junction table tracks which project changes relate to which issues (many-to-many), auto-populated via trigger when projects match.
 
+## Todo Project Pattern
 
-The `todo` project is used as a task list. Use descriptive keys so tasks are findable:
+The `todo` project is used as a cross-cutting task list. Use descriptive keys so tasks are findable:
 
 ```json
 // Store a pending task
