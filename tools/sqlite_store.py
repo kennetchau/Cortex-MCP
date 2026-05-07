@@ -115,6 +115,12 @@ def _init_db(conn: sqlite3.Connection):
     """
     cursor = conn.cursor()
     
+    # Enable WAL mode for better concurrency (multiple readers, single writer)
+    try:
+        cursor.execute('PRAGMA journal_mode=WAL')
+    except Exception:
+        pass
+    
     # Check if we've already migrated (projects table exists with data)
     cursor.execute("SELECT COUNT(*) FROM projects")
     has_projects_table = cursor.fetchone()[0] > 0
@@ -520,7 +526,8 @@ async def handle_query_context(request_id: str, args: dict, _tool_response, logg
     
     try:
         db_path = _get_db_path()
-        conn = sqlite3.connect(db_path)
+        conn = sqlite3.connect(db_path, timeout=10)
+        conn.execute('PRAGMA journal_mode=WAL')
         _init_db(conn)
         cursor = conn.cursor()
         
@@ -819,7 +826,8 @@ async def handle_add_project_change(request_id: str, args: dict, _tool_response,
     
     try:
         db_path = _get_db_path()
-        conn = sqlite3.connect(db_path)
+        conn = sqlite3.connect(db_path, timeout=10)
+        conn.execute('PRAGMA journal_mode=WAL')
         _init_db(conn)
         cursor = conn.cursor()
         
@@ -930,7 +938,8 @@ async def handle_list_project_changes(request_id: str, args: dict, _tool_respons
     
     try:
         db_path = _get_db_path()
-        conn = sqlite3.connect(db_path)
+        conn = sqlite3.connect(db_path, timeout=10)
+        conn.execute('PRAGMA journal_mode=WAL')
         _init_db(conn)
         cursor = conn.cursor()
         
@@ -987,7 +996,8 @@ async def handle_get_change_history(request_id: str, args: dict, _tool_response,
     
     try:
         db_path = _get_db_path()
-        conn = sqlite3.connect(db_path)
+        conn = sqlite3.connect(db_path, timeout=10)
+        conn.execute('PRAGMA journal_mode=WAL')
         _init_db(conn)
         cursor = conn.cursor()
         
@@ -1046,7 +1056,8 @@ async def handle_search_project_changes(request_id: str, args: dict, _tool_respo
     
     try:
         db_path = _get_db_path()
-        conn = sqlite3.connect(db_path)
+        conn = sqlite3.connect(db_path, timeout=10)
+        conn.execute('PRAGMA journal_mode=WAL')
         _init_db(conn)
         cursor = conn.cursor()
         
