@@ -53,7 +53,7 @@ A high-performance Model Context Protocol (MCP) engineered to transform LLMs int
 ```bash
 # Clone the repository
 git clone <repository-url>
-cd Cortex-MCP
+cd Handyman-MCP
 
 # Install dependencies using uv
 uv sync
