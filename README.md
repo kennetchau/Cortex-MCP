@@ -4,15 +4,13 @@ A high-performance Model Context Protocol (MCP) engineered to transform LLMs int
 
 ## Features
 
-- **Modular Architecture** - Each tool lives in its own file under `tools/`
-- **File Operations** - Read, write, append, replace, insert, delete files + recursive directory listing
-- **Web Research** - Search the live web (DDGS) and scrape/summarize URLs via Trafilatura
-- **File Search** - Grep through files with exact match or regex patterns
-- **Command Execution** - Run shell commands inside a Bubblewrap sandbox
-- **Markdown to PDF** - Convert Markdown files to styled PDFs via WeasyPrint
-- **Strict Isolation** - Bubblewrap sandbox with read-only root filesystem and disposable `/tmp`
-- **Persistent Context** - SQLite knowledge base with FTS5 full-text search, project isolation, and alias resolution
-- **Project Change Tracker** - Structured changelog with timeline steps for tracking bugs, refactors, features, and milestones
+* 🧠 Persistent Context Engine – SQLite + FTS5 knowledge base with project isolation and alias resolution for cross-session agent "memory."
+* 🛡️ Secure Execution Layer – Strict isolation via Bubblewrap sandbox; features a read-only root filesystem and disposable /tmp for safe command execution.
+* 📈 Project Lifecycle Auditor – A structured changelog system with timeline tracking for bugs, refactors, and milestones, enabling self-documenting development.
+* 🔍 Advanced Information Retrieval – Live web intelligence via DDGS and high-fidelity content extraction using Trafilatura.
+* 📂 Filesystem Agency – Full CRUD operations and regex-powered Grep search, optimized with line-based windowing for LLM efficiency.
+* 🏗️ Modular Design – A clean, FastAPI-based architecture where each tool is an independent, hot-swappable module for easy extensibility.
+
 
 ## Tools
 
