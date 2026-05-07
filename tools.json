@@ -674,6 +674,7 @@
                 }
             }
         }
+    },
     {
         "name": "get_issue_details",
         "description": "Get full details for a single issue by key and project.",
@@ -694,7 +695,6 @@
                 "key"
             ]
         }
-    },,
     },
     {
         "name": "update_issue_status",
