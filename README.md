@@ -1,6 +1,6 @@
 # Handyman-MCP
 
-A high-performance Model Context Protocol (MCP) engineered to transform LLMs into autonomous agents with persistent memory and secure system access. Cortex-MCP provides the "executive function" layer for AI models, combining a sophisticated SQLite-backed long-term memory with a hardened execution sandbox.
+A high-performance Model Context Protocol (MCP) engineered to transform LLMs into autonomous agents with persistent memory and secure system access. Handyman-MCP provides the "executive function" layer for AI models, combining a sophisticated SQLite-backed long-term memory with a hardened execution sandbox.
 
 ## Features
 
@@ -64,8 +64,8 @@ For maximum isolation and a clean host OS, I recommend running Cortex-MCP inside
 
 ```bash
 # Create and enter a dedicated toolbox
-toolbox create -c cortex-dev
-toolbox enter -c cortex-dev
+toolbox create -c handyman-dev
+toolbox enter -c handyman-dev
 
 # Install system dependencies & uv
 sudo dnf install bubblewrap  # If not present
