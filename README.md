@@ -1,4 +1,4 @@
-# MCP Server
+# Nexus: Persistent AI Workspace & Command Controller
 
 A modular Model Context Protocol (MCP) server built with FastAPI, providing tools for LLM interactions in a sandboxed environment.
 
