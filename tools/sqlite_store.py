@@ -31,53 +31,104 @@ def _get_db_path():
 
 
 def _detect_project_id():
-    """Detect project identity with fallback chain.
+    """Detect project identity and resolve to ID.
     
     Priority:
       1. pyproject.toml[project].name (Python-native, structured)
       2. git remote origin URL (extract repo name)
       3. directory name (last resort)
+    
+    Returns integer project_id by looking up the detected name in the projects table.
     """
+    # First detect the name using the old logic
+    detected_name = None
     try:
-        # 1. Try pyproject.toml first
         pyproject = Path(__file__).resolve().parent.parent / "pyproject.toml"
         if pyproject.exists():
             try:
                 import tomllib
                 with open(pyproject, "rb") as f:
                     config = tomllib.load(f)
-                name = config.get("project", {}).get("name")
-                if name:
-                    return name
+                detected_name = config.get("project", {}).get("name")
             except Exception:
                 pass
     
+        if not detected_name:
+            from config import BASE_DIR
+            result = run_command(["git", "remote", "get-url", "origin"], cwd=BASE_DIR, timeout=3)
+            if result.strip():
+                url = result.strip()
+                detected_name = url.rstrip("/").split("/")[-1].replace(".git", "")
+        
+        if not detected_name:
+            from config import BASE_DIR
+            detected_name = str(BASE_DIR.name)
     except Exception:
-        pass
+        detected_name = "unknown-project"
     
-    # 2. Fallback to git remote
-    try:
-        from config import BASE_DIR
-        result = run_command(["git", "remote", "get-url", "origin"], cwd=BASE_DIR, timeout=3)
-        if result.strip():
-            url = result.strip()
-            repo_name = url.rstrip("/").split("/")[-1].replace(".git", "")
-            return repo_name
-    except Exception:
-        pass
+    # Now resolve name → ID via projects table
+    db_path = _get_db_path()
+    conn = sqlite3.connect(db_path)
+    _init_db(conn)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM projects WHERE name = ?", (detected_name,))
+    row = cursor.fetchone()
+    project_id = row[0] if row else None
+    conn.close()
     
-    # 3. Last resort: directory name
+    if project_id is None:
+        # Create it for backward compat
+        return _resolve_project_id(detected_name)
+    
+    return project_id
+
+
+def _resolve_project_id(project_name):
+    """Resolve project name to ID. Creates if doesn't exist."""
+    db_path = _get_db_path()
+    conn = sqlite3.connect(db_path)
+    _init_db(conn)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM projects WHERE name = ?", (project_name,))
+    row = cursor.fetchone()
+    if row:
+        conn.close()
+        return row[0]
     try:
-        from config import BASE_DIR
-        return BASE_DIR.name
-    except Exception:
-        return "unknown-project"
+        cursor.execute("INSERT INTO projects (name) VALUES (?)", (project_name,))
+        last_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return last_id
+    except sqlite3.IntegrityError:
+        cursor.execute("SELECT id FROM projects WHERE name = ?", (project_name,))
+        last_id = cursor.fetchone()[0]
+        conn.close()
+        return last_id
 
 
 def _init_db(conn: sqlite3.Connection):
-    """Initialize database schema if tables don't exist."""
+    """Initialize database schema if tables don't exist.
+    
+    Handles both legacy schema (project TEXT) and migrated schema (project_id INTEGER).
+    After migration, checks for projects table and project_id columns to determine mode.
+    """
     cursor = conn.cursor()
     
+    # Check if we've already migrated (projects table exists with data)
+    cursor.execute("SELECT COUNT(*) FROM projects")
+    has_projects_table = cursor.fetchone()[0] > 0
+    
+    if has_projects_table:
+        _init_migrated_schema(cursor, conn)
+    else:
+        _init_legacy_schema(cursor, conn)
+    
+    conn.commit()
+
+
+def _init_legacy_schema(cursor, conn):
+    """Initialize the original schema (pre-migration)."""
     # Main context table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS context (
@@ -90,8 +141,7 @@ def _init_db(conn: sqlite3.Connection):
         )
     """)
     
-    # Alias table — maps alternate names to canonical context entries
-    # Migration: check if table exists (handles upgrades from pre-alias versions)
+    # Alias table
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='context_aliases'")
     if not cursor.fetchone():
         cursor.execute("""
@@ -103,13 +153,13 @@ def _init_db(conn: sqlite3.Connection):
             )
         """)
     
-    # Full-text search virtual table
+    # FTS virtual table
     cursor.execute("""
         CREATE VIRTUAL TABLE IF NOT EXISTS context_fts 
         USING fts5(key, content, project, content='context', content_rowid='id')
     """)
     
-    # Triggers to keep FTS in sync
+    # Triggers
     cursor.execute("""
         CREATE TRIGGER IF NOT EXISTS context_ai AFTER INSERT ON context
         BEGIN
@@ -117,7 +167,6 @@ def _init_db(conn: sqlite3.Connection):
             VALUES (new.id, new.key, new.content, new.project);
         END
     """)
-    
     cursor.execute("""
         CREATE TRIGGER IF NOT EXISTS context_ad AFTER DELETE ON context
         BEGIN
@@ -125,7 +174,6 @@ def _init_db(conn: sqlite3.Connection):
             VALUES ('delete', old.id, old.key, old.content, old.project);
         END
     """)
-    
     cursor.execute("""
         CREATE TRIGGER IF NOT EXISTS context_au AFTER UPDATE ON context
         BEGIN
@@ -136,9 +184,7 @@ def _init_db(conn: sqlite3.Connection):
         END
     """)
     
-    # ─── Project Changes Tables ──────────────────────────────────────
-
-    # Main changes table
+    # Project Changes Tables
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS project_changes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -152,7 +198,6 @@ def _init_db(conn: sqlite3.Connection):
         )
     """)
 
-    # Timeline details table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS project_change_details (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -165,13 +210,11 @@ def _init_db(conn: sqlite3.Connection):
         )
     """)
 
-    # FTS virtual table for searching summaries
     cursor.execute("""
         CREATE VIRTUAL TABLE IF NOT EXISTS project_changes_fts 
         USING fts5(summary, project, content='project_changes', content_rowid='id')
     """)
 
-    # Triggers to keep FTS in sync
     cursor.execute("""
         CREATE TRIGGER IF NOT EXISTS pc_ai AFTER INSERT ON project_changes
         BEGIN
@@ -179,7 +222,6 @@ def _init_db(conn: sqlite3.Connection):
             VALUES (new.id, new.summary, new.project);
         END
     """)
-
     cursor.execute("""
         CREATE TRIGGER IF NOT EXISTS pc_ad AFTER DELETE ON project_changes
         BEGIN
@@ -187,7 +229,6 @@ def _init_db(conn: sqlite3.Connection):
             VALUES ('delete', old.id, old.summary, old.project);
         END
     """)
-
     cursor.execute("""
         CREATE TRIGGER IF NOT EXISTS pc_au AFTER UPDATE ON project_changes
         BEGIN
@@ -198,9 +239,7 @@ def _init_db(conn: sqlite3.Connection):
         END
     """)
     
-    # ─── Issues Tables ────────────────────────────────────────────────
-
-    # Main issues table
+    # Issues Tables
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS issues (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -215,13 +254,11 @@ def _init_db(conn: sqlite3.Connection):
         )
     """)
 
-    # Migration: drop UNIQUE(project, key) constraint if it exists (v2 schema)
     try:
         cursor.execute("DROP INDEX IF EXISTS sqlite_autoindex_issues_1")
     except Exception:
         pass
 
-    # Junction table — many-to-many between issues and project changes
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS issue_change_links (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -231,8 +268,131 @@ def _init_db(conn: sqlite3.Connection):
             UNIQUE(issue_id, change_id)
         )
     """)
+
+
+def _init_migrated_schema(cursor, conn):
+    """Initialize schema for post-migration state."""
+    # Ensure projects table exists
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS projects (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
     
-    conn.commit()
+    # context_fts (without content= param — manual trigger sync)
+    cursor.execute("DROP TABLE IF EXISTS context_fts")
+    for t in ["context_fts_config", "context_fts_data", "context_fts_docsize", "context_fts_idx"]:
+        try: cursor.execute(f"DROP TABLE IF EXISTS {t}")
+        except Exception: pass
+    
+    cursor.execute("""
+        CREATE VIRTUAL TABLE context_fts USING fts5(key, content, project_name)
+    """)
+    
+    # Repopulate FTS from existing data
+    cursor.execute("""
+        INSERT OR IGNORE INTO context_fts(rowid, key, content, project_name)
+        SELECT c.id, c.key, c.content, p.name
+        FROM context c
+        JOIN projects p ON c.project_id = p.id
+    """)
+    
+    # Recreate triggers
+    cursor.execute("DROP TRIGGER IF EXISTS context_ai")
+    cursor.execute("DROP TRIGGER IF EXISTS context_ad")
+    cursor.execute("DROP TRIGGER IF EXISTS context_au")
+    
+    cursor.execute("""
+        CREATE TRIGGER context_ai AFTER INSERT ON context
+        BEGIN
+            INSERT INTO context_fts(rowid, key, content, project_name)
+            VALUES (new.id, new.key, new.content, 
+                    (SELECT name FROM projects WHERE id = new.project_id));
+        END
+    """)
+    cursor.execute("""
+        CREATE TRIGGER context_ad AFTER DELETE ON context
+        BEGIN
+            INSERT INTO context_fts(context_fts, rowid, key, content, project_name)
+            VALUES ('delete', old.id, old.key, old.content,
+                    (SELECT name FROM projects WHERE id = old.project_id));
+        END
+    """)
+    cursor.execute("""
+        CREATE TRIGGER context_au AFTER UPDATE ON context
+        BEGIN
+            INSERT INTO context_fts(context_fts, rowid, key, content, project_name)
+            VALUES ('delete', old.id, old.key, old.content,
+                    (SELECT name FROM projects WHERE id = old.project_id));
+            INSERT INTO context_fts(rowid, key, content, project_name)
+            VALUES (new.id, new.key, new.content,
+                    (SELECT name FROM projects WHERE id = new.project_id));
+        END
+    """)
+    
+    # project_changes_fts
+    cursor.execute("DROP TABLE IF EXISTS project_changes_fts")
+    for t in ["project_changes_fts_config", "project_changes_fts_data", "project_changes_fts_docsize", "project_changes_fts_idx"]:
+        try: cursor.execute(f"DROP TABLE IF EXISTS {t}")
+        except Exception: pass
+    
+    cursor.execute("""
+        CREATE VIRTUAL TABLE project_changes_fts USING fts5(summary, project_name)
+    """)
+    
+    cursor.execute("DROP TRIGGER IF EXISTS pc_ai")
+    cursor.execute("DROP TRIGGER IF EXISTS pc_ad")
+    cursor.execute("DROP TRIGGER IF EXISTS pc_au")
+    
+    cursor.execute("""
+        CREATE TRIGGER pc_ai AFTER INSERT ON project_changes
+        BEGIN
+            INSERT INTO project_changes_fts(rowid, summary, project_name)
+            VALUES (new.id, new.summary, 
+                    (SELECT name FROM projects WHERE id = new.project_id));
+        END
+    """)
+    cursor.execute("""
+        CREATE TRIGGER pc_ad AFTER DELETE ON project_changes
+        BEGIN
+            INSERT INTO project_changes_fts(project_changes_fts, rowid, summary, project_name)
+            VALUES ('delete', old.id, old.summary,
+                    (SELECT name FROM projects WHERE id = old.project_id));
+        END
+    """)
+    cursor.execute("""
+        CREATE TRIGGER pc_au AFTER UPDATE ON project_changes
+        BEGIN
+            INSERT INTO project_changes_fts(project_changes_fts, rowid, summary, project_name)
+            VALUES ('delete', old.id, old.summary,
+                    (SELECT name FROM projects WHERE id = old.project_id));
+            INSERT INTO project_changes_fts(rowid, summary, project_name)
+            VALUES (new.id, new.summary,
+                    (SELECT name FROM projects WHERE id = new.project_id));
+        END
+    """)
+    
+    # Create backward-compat views if they don't exist
+    cursor.execute("""
+        CREATE VIEW IF NOT EXISTS context_with_project AS
+        SELECT c.id, c.key, c.content, c.updated_at, p.name as project
+        FROM context c
+        JOIN projects p ON c.project_id = p.id
+    """)
+    cursor.execute("""
+        CREATE VIEW IF NOT EXISTS project_changes_with_project AS
+        SELECT pc.id, pc.key, pc.change_type, pc.summary, pc.created_at, pc.updated_at, p.name as project
+        FROM project_changes pc
+        JOIN projects p ON pc.project_id = p.id
+    """)
+    cursor.execute("""
+        CREATE VIEW IF NOT EXISTS issues_with_project AS
+        SELECT i.id, i.key, i.status, i.title, i.description, i.fixed_in_commit, i.created_at, i.updated_at, p.name as project
+        FROM issues i
+        JOIN projects p ON i.project_id = p.id
+    """)
 
 
 def _fts_quote(term: str) -> str:
@@ -240,7 +400,7 @@ def _fts_quote(term: str) -> str:
     return f'"{term}"'
 
 
-def _resolve_key(conn: sqlite3.Connection, key: str, project: str):
+def _resolve_key(conn: sqlite3.Connection, key: str, project_id: int):
     """Resolve a key to its canonical context entry.
     
     Returns (context_id, is_alias) or (None, False) if not found.
@@ -250,8 +410,8 @@ def _resolve_key(conn: sqlite3.Connection, key: str, project: str):
     
     # Step 1: Check canonical key
     cursor.execute(
-        "SELECT id FROM context WHERE key = ? AND project = ?",
-        (key, project)
+        "SELECT id FROM context WHERE key = ? AND project_id = ?",
+        (key, project_id)
     )
     row = cursor.fetchone()
     if row:
@@ -259,8 +419,8 @@ def _resolve_key(conn: sqlite3.Connection, key: str, project: str):
     
     # Step 2: Check aliases
     cursor.execute(
-        "SELECT context_id FROM context_aliases WHERE alias_key = ? AND project = ?",
-        (key, project)
+        "SELECT context_id FROM context_aliases WHERE alias_key = ? AND project_id = ?",
+        (key, project_id)
     )
     row = cursor.fetchone()
     if row:
@@ -275,26 +435,34 @@ async def handle_store_context(request_id: str, args: dict, _tool_response, logg
     """Store or update project context in SQLite knowledge base."""
     key = args.get("key", "")
     content = args.get("content", "")
-    project = args.get("project", None)
-    
+    project_name = args.get("project", None)
+
     if not key or not content:
         return _tool_response(request_id, "Error: 'key' and 'content' are required.")
-    
-    # Resolve project ID
-    if project and project != "default":
-        resolved_project = project
-    else:
-        resolved_project = _detect_project_id()
-    
+
+    # Resolve project name to ID
     try:
         db_path = _get_db_path()
         conn = sqlite3.connect(db_path)
         _init_db(conn)
         cursor = conn.cursor()
-        
+
+        if project_name and project_name != "default":
+            cursor.execute("SELECT id FROM projects WHERE name = ?", (project_name,))
+            row = cursor.fetchone()
+            if not row:
+                conn.close()
+                return _tool_response(request_id, f"Project '{project_name}' not found.")
+            resolved_project_id = row[0]
+            resolved_project_name = project_name
+        else:
+            resolved_project_id = _detect_project_id()
+            cursor.execute("SELECT name FROM projects WHERE id = ?", (resolved_project_id,))
+            resolved_project_name = cursor.fetchone()[0]
+
         # Resolve key → canonical context entry
-        context_id, is_alias = _resolve_key(conn, key, resolved_project)
-        
+        context_id, is_alias = _resolve_key(conn, key, resolved_project_id)
+
         if context_id:
             cursor.execute(
                 "UPDATE context SET content = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
@@ -304,16 +472,16 @@ async def handle_store_context(request_id: str, args: dict, _tool_response, logg
             action = "Updated"
         else:
             cursor.execute(
-                "INSERT INTO context (key, content, project) VALUES (?, ?, ?)",
-                (key, content, resolved_project)
+                "INSERT INTO context (key, content, project_id) VALUES (?, ?, ?)",
+                (key, content, resolved_project_id)
             )
             action = "Stored"
             target_label = f"'{key}'"
-        
+
         conn.commit()
         conn.close()
-        
-        return _tool_response(request_id, f"{action} context {target_label} for project '{resolved_project}'.")
+
+        return _tool_response(request_id, f"{action} context {target_label} for project '{resolved_project_name}'.")
         
     except Exception as e:
         if logger:
@@ -337,12 +505,12 @@ async def handle_query_context(request_id: str, args: dict, _tool_response, logg
     
     # Resolve project ID: explicit value → scoped; missing → cross-project search
     if project_arg and project_arg != "default":
-        resolved_project = project_arg
+        resolved_project_name = project_arg
         cross_project = False
     elif project_arg is None or project_arg == "":
         cross_project = True
     else:
-        resolved_project = _detect_project_id()
+        resolved_project_name = None
         cross_project = False
     
     # Validate sort parameter
@@ -356,6 +524,19 @@ async def handle_query_context(request_id: str, args: dict, _tool_response, logg
         _init_db(conn)
         cursor = conn.cursor()
         
+        # Resolve project name to ID (only when scoped)
+        resolved_project_id = None
+        if not cross_project:
+            if resolved_project_name:
+                cursor.execute("SELECT id FROM projects WHERE name = ?", (resolved_project_name,))
+                row = cursor.fetchone()
+                if not row:
+                    conn.close()
+                    return _tool_response(request_id, f"Project '{resolved_project_name}' not found.")
+                resolved_project_id = row[0]
+            else:
+                resolved_project_id = _detect_project_id()
+        
         results = []
         
         if keyword:
@@ -365,9 +546,10 @@ async def handle_query_context(request_id: str, args: dict, _tool_response, logg
             quoted_keyword = f'"{keyword}"'
             if cross_project:
                 cursor.execute(
-                    f"""SELECT c.project, c.key, c.content, c.updated_at 
+                    f"""SELECT p.name as project, c.key, c.content, c.updated_at 
                         FROM context c 
-                        JOIN context_fts f ON c.id = f.rowid 
+                        JOIN context_fts f ON c.id = f.rowid
+                        JOIN projects p ON c.project_id = p.id
                         WHERE context_fts MATCH ?
                         ORDER BY c.{sort_by} DESC
                         LIMIT ?""",
@@ -375,13 +557,14 @@ async def handle_query_context(request_id: str, args: dict, _tool_response, logg
                 )
             else:
                 cursor.execute(
-                    f"""SELECT c.project, c.key, c.content, c.updated_at 
+                    f"""SELECT c.key, c.content, c.updated_at, p.name as project
                         FROM context c 
-                        JOIN context_fts f ON c.id = f.rowid 
-                        WHERE context_fts MATCH ? AND c.project = ?
+                        JOIN context_fts f ON c.id = f.rowid
+                        JOIN projects p ON c.project_id = p.id
+                        WHERE context_fts MATCH ? AND c.project_id = ?
                         ORDER BY c.{sort_by} DESC
                         LIMIT ?""",
-                    (quoted_keyword, resolved_project, limit)
+                    (quoted_keyword, resolved_project_id, limit)
                 )
             rows = cursor.fetchall()
             for row in rows:
@@ -393,10 +576,10 @@ async def handle_query_context(request_id: str, args: dict, _tool_response, logg
                 })
         elif key:
             # Resolve key → canonical entry (checks aliases too)
-            context_id, is_alias = _resolve_key(conn, key, resolved_project)
+            context_id, is_alias = _resolve_key(conn, key, resolved_project_id)
             if context_id:
                 cursor.execute(
-                    "SELECT project, key, content, updated_at FROM context WHERE id = ?",
+                    "SELECT p.name as project, c.key, c.content, c.updated_at FROM context c JOIN projects p ON c.project_id = p.id WHERE c.id = ?",
                     (context_id,)
                 )
                 row = cursor.fetchone()
@@ -417,13 +600,13 @@ async def handle_query_context(request_id: str, args: dict, _tool_response, logg
             sort_clause = f"ORDER BY c.{sort_by} DESC" if sort_by == "key" else "ORDER BY c.updated_at DESC"
             if cross_project:
                 cursor.execute(
-                    f"SELECT c.project, c.key, c.content, c.updated_at FROM context c {sort_clause} LIMIT ?",
+                    f"SELECT p.name as project, c.key, c.content, c.updated_at FROM context c JOIN projects p ON c.project_id = p.id {sort_clause} LIMIT ?",
                     (limit,)
                 )
             else:
                 cursor.execute(
-                    f"SELECT c.project, c.key, c.content, c.updated_at FROM context c WHERE c.project = ? {sort_clause} LIMIT ?",
-                    (resolved_project, limit)
+                    f"SELECT p.name as project, c.key, c.content, c.updated_at FROM context c JOIN projects p ON c.project_id = p.id WHERE c.project_id = ? {sort_clause} LIMIT ?",
+                    (resolved_project_id, limit)
                 )
             rows = cursor.fetchall()
             for row in rows:
@@ -441,7 +624,7 @@ async def handle_query_context(request_id: str, args: dict, _tool_response, logg
         if not results:
             if cross_project:
                 return _tool_response(request_id, "No context found.")
-            return _tool_response(request_id, f"No context found for project '{resolved_project}'.")
+            return _tool_response(request_id, f"No context found for project '{resolved_project_name}'.")
         
         # Use title (list mode) or content (search/lookup mode) for display
         formatted = "\n\n".join([
@@ -461,22 +644,30 @@ async def handle_clear_context(request_id: str, args: dict, _tool_response, logg
     """Clear stored context entries."""
     project_arg = args.get("project", None)
     key = args.get("key", None)
-    
-    # Resolve project ID
-    if project_arg and project_arg != "default":
-        resolved_project = project_arg
-    else:
-        resolved_project = _detect_project_id()
-    
+
+    # Resolve project name to ID
     try:
         db_path = _get_db_path()
         conn = sqlite3.connect(db_path)
         _init_db(conn)
         cursor = conn.cursor()
-        
+
+        if project_arg and project_arg != "default":
+            cursor.execute("SELECT id FROM projects WHERE name = ?", (project_arg,))
+            row = cursor.fetchone()
+            if not row:
+                conn.close()
+                return _tool_response(request_id, f"Project '{project_arg}' not found.")
+            resolved_project_id = row[0]
+            resolved_project_name = project_arg
+        else:
+            resolved_project_id = _detect_project_id()
+            cursor.execute("SELECT name FROM projects WHERE id = ?", (resolved_project_id,))
+            resolved_project_name = cursor.fetchone()[0]
+
         if key:
             # Resolve key → canonical id (handles aliases via CASCADE DELETE)
-            context_id, is_alias = _resolve_key(conn, key, resolved_project)
+            context_id, is_alias = _resolve_key(conn, key, resolved_project_id)
             if context_id:
                 cursor.execute("DELETE FROM context WHERE id = ?", (context_id,))
                 label = f"'{key}'" + (" (via alias)" if is_alias else "")
@@ -486,16 +677,16 @@ async def handle_clear_context(request_id: str, args: dict, _tool_response, logg
                 label = f"'{key}'"
         else:
             cursor.execute(
-                "DELETE FROM context WHERE project = ?",
-                (resolved_project,)
+                "DELETE FROM context WHERE project_id = ?",
+                (resolved_project_id,)
             )
             deleted = cursor.rowcount
             label = f"all entries"
-        
+
         conn.commit()
         conn.close()
-        
-        return _tool_response(request_id, f"Cleared {deleted} context entry/entries for project '{resolved_project}' ({label}).")
+
+        return _tool_response(request_id, f"Cleared {deleted} context entry/entries for project '{resolved_project_name}' ({label}).")
         
     except Exception as e:
         if logger:
@@ -511,11 +702,11 @@ async def handle_list_projects(request_id: str, args: dict, _tool_response, logg
         _init_db(conn)
         cursor = conn.cursor()
         
-        # Query both context and project_changes tables, merge and deduplicate
+        # Query both context and project_changes tables via views, merge and deduplicate
         cursor.execute("""
-            SELECT project, MAX(updated_at) as last_updated FROM context GROUP BY project
+            SELECT project, MAX(updated_at) as last_updated FROM context_with_project GROUP BY project
             UNION ALL
-            SELECT project, MAX(created_at) as last_updated FROM project_changes GROUP BY project
+            SELECT project, MAX(created_at) as last_updated FROM project_changes_with_project GROUP BY project
         """)
         all_rows = cursor.fetchall()
         
@@ -553,49 +744,57 @@ async def handle_add_context_alias(request_id: str, args: dict, _tool_response, 
     if not context_key or not alias_name:
         return _tool_response(request_id, "Error: 'context_key' and 'alias_name' are required.")
     
-    # Resolve project ID
-    if project and project != "default":
-        resolved_project = project
-    else:
-        resolved_project = _detect_project_id()
-    
+    # Resolve project name to ID
     try:
         db_path = _get_db_path()
         conn = sqlite3.connect(db_path)
         _init_db(conn)
         cursor = conn.cursor()
-        
+
+        if project and project != "default":
+            cursor.execute("SELECT id FROM projects WHERE name = ?", (project,))
+            row = cursor.fetchone()
+            if not row:
+                conn.close()
+                return _tool_response(request_id, f"Project '{project}' not found.")
+            resolved_project_id = row[0]
+            resolved_project_name = project
+        else:
+            resolved_project_id = _detect_project_id()
+            cursor.execute("SELECT name FROM projects WHERE id = ?", (resolved_project_id,))
+            resolved_project_name = cursor.fetchone()[0]
+
         # Check canonical key exists
         cursor.execute(
-            "SELECT id FROM context WHERE key = ? AND project = ?",
-            (context_key, resolved_project)
+            "SELECT id FROM context WHERE key = ? AND project_id = ?",
+            (context_key, resolved_project_id)
         )
         row = cursor.fetchone()
-        
+
         if not row:
             conn.close()
-            return _tool_response(request_id, f"Context key '{context_key}' not found for project '{resolved_project}'.")
-        
+            return _tool_response(request_id, f"Context key '{context_key}' not found for project '{resolved_project_name}'.")
+
         context_id = row[0]
-        
+
         # Check alias doesn't already exist
         cursor.execute(
-            "SELECT id FROM context_aliases WHERE alias_key = ? AND project = ?",
-            (alias_name, resolved_project)
+            "SELECT id FROM context_aliases WHERE alias_key = ? AND project_id = ?",
+            (alias_name, resolved_project_id)
         )
         if cursor.fetchone():
             conn.close()
-            return _tool_response(request_id, f"Alias '{alias_name}' already exists for project '{resolved_project}'.")
-        
+            return _tool_response(request_id, f"Alias '{alias_name}' already exists for project '{resolved_project_name}'.")
+
         # Insert alias
         cursor.execute(
-            "INSERT INTO context_aliases (context_id, alias_key, project) VALUES (?, ?, ?)",
-            (context_id, alias_name, resolved_project)
+            "INSERT INTO context_aliases (context_id, alias_key, project_id) VALUES (?, ?, ?)",
+            (context_id, alias_name, resolved_project_id)
         )
         conn.commit()
         conn.close()
         
-        return _tool_response(request_id, f"Added alias '{alias_name}' → '{context_key}' for project '{resolved_project}'.")
+        return _tool_response(request_id, f"Added alias '{alias_name}' → '{context_key}' for project '{resolved_project_name}'.")
         
     except Exception as e:
         if logger:
@@ -606,12 +805,12 @@ async def handle_add_context_alias(request_id: str, args: dict, _tool_response, 
 
 async def handle_add_project_change(request_id: str, args: dict, _tool_response, logger=None, **kwargs) -> dict:
     """Record a new project change entry."""
-    project = args.get("project", "")
+    project_name = args.get("project", "")
     key = args.get("key", "")
     change_type = args.get("change_type", "other")
     summary = args.get("summary", "")
     
-    if not project or not key or not change_type or not summary:
+    if not project_name or not key or not change_type or not summary:
         return _tool_response(request_id, "Error: 'project', 'key', 'change_type', and 'summary' are required.")
     
     valid_types = ('bugfix', 'refactor', 'feature', 'milestone', 'config', 'other')
@@ -624,23 +823,31 @@ async def handle_add_project_change(request_id: str, args: dict, _tool_response,
         _init_db(conn)
         cursor = conn.cursor()
         
+        # Resolve project name to ID
+        cursor.execute("SELECT id FROM projects WHERE name = ?", (project_name,))
+        row = cursor.fetchone()
+        if not row:
+            conn.close()
+            return _tool_response(request_id, f"Project '{project_name}' not found.")
+        project_id = row[0]
+        
         # Check for duplicate (project, key)
         cursor.execute(
-            "SELECT id FROM project_changes WHERE project = ? AND key = ?",
-            (project, key)
+            "SELECT id FROM project_changes WHERE project_id = ? AND key = ?",
+            (project_id, key)
         )
         if cursor.fetchone():
             conn.close()
-            return _tool_response(request_id, f"Change '{key}' already exists for project '{project}'.")
+            return _tool_response(request_id, f"Change '{key}' already exists for project '{project_name}'.")
         
         cursor.execute(
-            "INSERT INTO project_changes (project, key, change_type, summary) VALUES (?, ?, ?, ?)",
-            (project, key, change_type, summary)
+            "INSERT INTO project_changes (project_id, key, change_type, summary) VALUES (?, ?, ?, ?)",
+            (project_id, key, change_type, summary)
         )
         conn.commit()
         conn.close()
         
-        return _tool_response(request_id, f"Added change '{key}' to project '{project}' ({change_type}).")
+        return _tool_response(request_id, f"Added change '{key}' to project '{project_name}' ({change_type}).")
         
     except Exception as e:
         if logger:
@@ -660,6 +867,15 @@ async def handle_add_change_step(request_id: str, args: dict, _tool_response, lo
     if not change_key or not project or not step or not date:
         return _tool_response(request_id, "Error: 'change_key', 'project', 'step', and 'date' are required.")
     
+    # Resolve project name to ID
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM projects WHERE name = ?", (project,))
+    proj_row = cursor.fetchone()
+    if not proj_row:
+        conn.close()
+        return _tool_response(request_id, f"Project '{project}' not found.")
+    project_id = proj_row[0]
+    
     try:
         db_path = _get_db_path()
         conn = sqlite3.connect(db_path)
@@ -668,8 +884,8 @@ async def handle_add_change_step(request_id: str, args: dict, _tool_response, lo
         
         # Find the change
         cursor.execute(
-            "SELECT id FROM project_changes WHERE project = ? AND key = ?",
-            (project, change_key)
+            "SELECT id FROM project_changes WHERE project_id = ? AND key = ?",
+            (project_id, change_key)
         )
         row = cursor.fetchone()
         if not row:
@@ -695,12 +911,12 @@ async def handle_add_change_step(request_id: str, args: dict, _tool_response, lo
 
 async def handle_list_project_changes(request_id: str, args: dict, _tool_response, logger=None, **kwargs) -> dict:
     """List changes for a project with optional filters."""
-    project = args.get("project", "")
+    project_name = args.get("project", "")
     change_type = args.get("change_type", None)
     date_from = args.get("date_from", None)
     date_to = args.get("date_to", None)
     
-    if not project:
+    if not project_name:
         return _tool_response(request_id, "Error: 'project' is required.")
     
     try:
@@ -709,34 +925,42 @@ async def handle_list_project_changes(request_id: str, args: dict, _tool_respons
         _init_db(conn)
         cursor = conn.cursor()
         
-        query = "SELECT id, key, change_type, summary, created_at FROM project_changes WHERE project = ?"
-        params = [project]
+        # Resolve project name to ID
+        cursor.execute("SELECT id FROM projects WHERE name = ?", (project_name,))
+        row = cursor.fetchone()
+        if not row:
+            conn.close()
+            return _tool_response(request_id, f"Project '{project_name}' not found.")
+        project_id = row[0]
+        
+        query = "SELECT pc.key, pc.change_type, pc.summary, pc.created_at, p.name as project FROM project_changes pc JOIN projects p ON pc.project_id = p.id WHERE pc.project_id = ?"
+        params = [project_id]
         
         if change_type:
-            query += " AND change_type = ?"
+            query += " AND pc.change_type = ?"
             params.append(change_type)
         if date_from:
-            query += " AND created_at >= ?"
+            query += " AND pc.created_at >= ?"
             params.append(date_from)
         if date_to:
-            query += " AND created_at <= ?"
+            query += " AND pc.created_at <= ?"
             params.append(date_to)
         
-        query += " ORDER BY created_at DESC"
+        query += " ORDER BY pc.created_at DESC"
         
         cursor.execute(query, params)
         rows = cursor.fetchall()
         conn.close()
         
         if not rows:
-            return _tool_response(request_id, f"No changes found for project '{project}'.")
+            return _tool_response(request_id, f"No changes found for project '{project_name}'.")
         
         formatted = "\n".join([
-            f"- [{row[2]}] {row[1]} — {row[3]} (created: {row[4]})"
+            f"- [{row[1]}] {row[0]} — {row[2]} (created: {row[3]})"
             for row in rows
         ])
         
-        return _tool_response(request_id, f"Project changes for '{project}' ({len(rows)}):\n{formatted}")
+        return _tool_response(request_id, f"Project changes for '{project_name}' ({len(rows)}):\n{formatted}")
         
     except Exception as e:
         if logger:
@@ -747,9 +971,9 @@ async def handle_list_project_changes(request_id: str, args: dict, _tool_respons
 async def handle_get_change_history(request_id: str, args: dict, _tool_response, logger=None, **kwargs) -> dict:
     """Get full history for one change including timeline steps."""
     change_key = args.get("change_key", "")
-    project = args.get("project", "")
+    project_name = args.get("project", "")
     
-    if not change_key or not project:
+    if not change_key or not project_name:
         return _tool_response(request_id, "Error: 'change_key' and 'project' are required.")
     
     try:
@@ -758,15 +982,23 @@ async def handle_get_change_history(request_id: str, args: dict, _tool_response,
         _init_db(conn)
         cursor = conn.cursor()
         
+        # Resolve project name to ID
+        cursor.execute("SELECT id FROM projects WHERE name = ?", (project_name,))
+        row = cursor.fetchone()
+        if not row:
+            conn.close()
+            return _tool_response(request_id, f"Project '{project_name}' not found.")
+        project_id = row[0]
+        
         # Get the change
         cursor.execute(
-            "SELECT id, key, change_type, summary, created_at FROM project_changes WHERE project = ? AND key = ?",
-            (project, change_key)
+            "SELECT pc.id, pc.key, pc.change_type, pc.summary, pc.created_at FROM project_changes pc WHERE pc.project_id = ? AND pc.key = ?",
+            (project_id, change_key)
         )
         row = cursor.fetchone()
         if not row:
             conn.close()
-            return _tool_response(request_id, f"Change '{change_key}' not found for project '{project}'.")
+            return _tool_response(request_id, f"Change '{change_key}' not found for project '{project_name}'.")
         
         change_id, key, change_type, summary, created_at = row
         
@@ -797,7 +1029,7 @@ async def handle_get_change_history(request_id: str, args: dict, _tool_response,
 async def handle_search_project_changes(request_id: str, args: dict, _tool_response, logger=None, **kwargs) -> dict:
     """FTS search across project changes."""
     query_text = args.get("query", "")
-    project = args.get("project", None)
+    project_name = args.get("project", None)
     change_type = args.get("change_type", None)
     
     if not query_text:
@@ -809,30 +1041,43 @@ async def handle_search_project_changes(request_id: str, args: dict, _tool_respo
         _init_db(conn)
         cursor = conn.cursor()
         
+        # Resolve project name to ID if provided
+        project_id = None
+        if project_name:
+            cursor.execute("SELECT id FROM projects WHERE name = ?", (project_name,))
+            row = cursor.fetchone()
+            if not row:
+                conn.close()
+                return _tool_response(request_id, f"Project '{project_name}' not found.")
+            project_id = row[0]
+        
         # FTS search on summary — quote to handle special chars like - in project names
         quoted_query = _fts_quote(query_text)
-        if project and change_type:
+        if project_id and change_type:
             cursor.execute(
-                """SELECT pc.project, pc.key, pc.change_type, pc.summary, pc.created_at
+                """SELECT p.name as project, pc.key, pc.change_type, pc.summary, pc.created_at
                    FROM project_changes pc
+                   JOIN projects p ON pc.project_id = p.id
                    JOIN project_changes_fts pcf ON pc.id = pcf.rowid
-                   WHERE project_changes_fts MATCH ? AND pc.project = ? AND pc.change_type = ?
+                   WHERE project_changes_fts MATCH ? AND pc.project_id = ? AND pc.change_type = ?
                    ORDER BY pcf.rank""",
-                (quoted_query, project, change_type)
+                (quoted_query, project_id, change_type)
             )
-        elif project:
+        elif project_id:
             cursor.execute(
-                """SELECT pc.project, pc.key, pc.change_type, pc.summary, pc.created_at
+                """SELECT p.name as project, pc.key, pc.change_type, pc.summary, pc.created_at
                    FROM project_changes pc
+                   JOIN projects p ON pc.project_id = p.id
                    JOIN project_changes_fts pcf ON pc.id = pcf.rowid
-                   WHERE project_changes_fts MATCH ? AND pc.project = ?
+                   WHERE project_changes_fts MATCH ? AND pc.project_id = ?
                    ORDER BY pcf.rank""",
-                (quoted_query, project)
+                (quoted_query, project_id)
             )
         else:
             cursor.execute(
-                """SELECT pc.project, pc.key, pc.change_type, pc.summary, pc.created_at
+                """SELECT p.name as project, pc.key, pc.change_type, pc.summary, pc.created_at
                    FROM project_changes pc
+                   JOIN projects p ON pc.project_id = p.id
                    JOIN project_changes_fts pcf ON pc.id = pcf.rowid
                    WHERE project_changes_fts MATCH ?
                    ORDER BY pcf.rank""",
@@ -861,7 +1106,7 @@ async def handle_search_project_changes(request_id: str, args: dict, _tool_respo
 
 async def handle_store_issue(request_id: str, args: dict, _tool_response, logger=None, **kwargs) -> dict:
     """Store or update an issue in the issues table."""
-    project = args.get("project", None)
+    project_name = args.get("project", None)
     key = args.get("key", "")
     status = args.get("status", "open")
     title = args.get("title", "")
@@ -875,22 +1120,30 @@ async def handle_store_issue(request_id: str, args: dict, _tool_response, logger
     if status not in valid_statuses:
         return _tool_response(request_id, f"Error: 'status' must be one of: {', '.join(valid_statuses)}")
 
-    # Resolve project ID
-    if project and project != "default":
-        resolved_project = project
-    else:
-        resolved_project = _detect_project_id()
-
+    # Resolve project name to ID
     try:
         db_path = _get_db_path()
         conn = sqlite3.connect(db_path)
         _init_db(conn)
         cursor = conn.cursor()
 
+        if project_name and project_name != "default":
+            cursor.execute("SELECT id FROM projects WHERE name = ?", (project_name,))
+            row = cursor.fetchone()
+            if not row:
+                conn.close()
+                return _tool_response(request_id, f"Project '{project_name}' not found.")
+            resolved_project_id = row[0]
+            resolved_project_name = project_name
+        else:
+            resolved_project_id = _detect_project_id()
+            cursor.execute("SELECT name FROM projects WHERE id = ?", (resolved_project_id,))
+            resolved_project_name = cursor.fetchone()[0]
+
         # Check if issue already exists
         cursor.execute(
-            "SELECT id FROM issues WHERE project = ? AND key = ?",
-            (resolved_project, key)
+            "SELECT id FROM issues WHERE project_id = ? AND key = ?",
+            (resolved_project_id, key)
         )
         existing = cursor.fetchone()
 
@@ -903,15 +1156,15 @@ async def handle_store_issue(request_id: str, args: dict, _tool_response, logger
             action = "Updated"
         else:
             cursor.execute("""
-                INSERT INTO issues (project, key, status, title, description, fixed_in_commit)
+                INSERT INTO issues (project_id, key, status, title, description, fixed_in_commit)
                 VALUES (?, ?, ?, ?, ?, ?)
-            """, (resolved_project, key, status, title, description, fixed_in_commit))
+            """, (resolved_project_id, key, status, title, description, fixed_in_commit))
             action = "Stored"
 
         conn.commit()
         conn.close()
 
-        return _tool_response(request_id, f"{action} issue '{key}' for project '{resolved_project}' (status: {status}).")
+        return _tool_response(request_id, f"{action} issue '{key}' for project '{resolved_project_name}' (status: {status}).")
 
     except Exception as e:
         if logger:
@@ -926,31 +1179,42 @@ async def handle_query_issues(request_id: str, args: dict, _tool_response, logge
     key_filter = args.get("key", None)
 
     # Resolve project ID
-    if project_arg and project_arg != "default":
-        resolved_project = project_arg
-    elif project_arg is None or project_arg == "":
-        resolved_project = None  # Cross-project query
-    else:
-        resolved_project = _detect_project_id()
-
     try:
         db_path = _get_db_path()
         conn = sqlite3.connect(db_path)
         _init_db(conn)
         cursor = conn.cursor()
 
+        resolved_project_id = None
+        resolved_project_name = None
+        if project_arg and project_arg != "default":
+            cursor.execute("SELECT id FROM projects WHERE name = ?", (project_arg,))
+            row = cursor.fetchone()
+            if not row:
+                conn.close()
+                return _tool_response(request_id, f"Project '{project_arg}' not found.")
+            resolved_project_id = row[0]
+            resolved_project_name = project_arg
+        elif project_arg is None or project_arg == "":
+            pass  # Cross-project query
+        else:
+            resolved_project_id = _detect_project_id()
+            cursor.execute("SELECT name FROM projects WHERE id = ?", (resolved_project_id,))
+            resolved_project_name = cursor.fetchone()[0]
+
         query = """
-            SELECT i.project, i.key, i.status, i.title, i.description, 
+            SELECT p.name as project, i.key, i.status, i.title, i.description, 
                    i.fixed_in_commit, i.created_at,
                    (SELECT COUNT(*) FROM issue_change_links WHERE issue_id = i.id) as related_changes
             FROM issues i
+            JOIN projects p ON i.project_id = p.id
             WHERE 1=1
         """
         params = []
 
-        if resolved_project:
-            query += " AND i.project = ?"
-            params.append(resolved_project)
+        if resolved_project_id:
+            query += " AND i.project_id = ?"
+            params.append(resolved_project_id)
         if status_filter:
             query += " AND i.status = ?"
             params.append(status_filter)
@@ -966,8 +1230,8 @@ async def handle_query_issues(request_id: str, args: dict, _tool_response, logge
 
         if not rows:
             filters = []
-            if resolved_project:
-                filters.append(f"project='{resolved_project}'")
+            if resolved_project_name:
+                filters.append(f"project='{resolved_project_name}'")
             if status_filter:
                 filters.append(f"status='{status_filter}'")
             if key_filter:
@@ -992,7 +1256,7 @@ async def handle_query_issues(request_id: str, args: dict, _tool_response, logge
 
 async def handle_update_issue_status(request_id: str, args: dict, _tool_response, logger=None, **kwargs) -> dict:
     """Update the status of an existing issue."""
-    project = args.get("project", None)
+    project_name = args.get("project", None)
     key = args.get("key", "")
     new_status = args.get("status", None)
 
@@ -1003,28 +1267,36 @@ async def handle_update_issue_status(request_id: str, args: dict, _tool_response
     if new_status not in valid_statuses:
         return _tool_response(request_id, f"Error: 'status' must be one of: {', '.join(valid_statuses)}")
 
-    # Resolve project ID
-    if project and project != "default":
-        resolved_project = project
-    else:
-        resolved_project = _detect_project_id()
-
+    # Resolve project name to ID
     try:
         db_path = _get_db_path()
         conn = sqlite3.connect(db_path)
         _init_db(conn)
         cursor = conn.cursor()
 
+        if project_name and project_name != "default":
+            cursor.execute("SELECT id FROM projects WHERE name = ?", (project_name,))
+            row = cursor.fetchone()
+            if not row:
+                conn.close()
+                return _tool_response(request_id, f"Project '{project_name}' not found.")
+            resolved_project_id = row[0]
+            resolved_project_name = project_name
+        else:
+            resolved_project_id = _detect_project_id()
+            cursor.execute("SELECT name FROM projects WHERE id = ?", (resolved_project_id,))
+            resolved_project_name = cursor.fetchone()[0]
+
         # Find the issue
         cursor.execute(
-            "SELECT id, status FROM issues WHERE project = ? AND key = ?",
-            (resolved_project, key)
+            "SELECT id, status FROM issues WHERE project_id = ? AND key = ?",
+            (resolved_project_id, key)
         )
         row = cursor.fetchone()
 
         if not row:
             conn.close()
-            return _tool_response(request_id, f"Issue '{key}' not found for project '{resolved_project}'.")
+            return _tool_response(request_id, f"Issue '{key}' not found for project '{resolved_project_name}'.")
 
         old_status = row[1]
         issue_id = row[0]
@@ -1049,42 +1321,52 @@ async def handle_list_issues(request_id: str, args: dict, _tool_response, logger
     project_arg = args.get("project", None)
     status_filter = args.get("status", None)
 
-    # Resolve project ID
-    if project_arg and project_arg != "default":
-        resolved_project = project_arg
-    elif project_arg is None or project_arg == "":
-        resolved_project = _detect_project_id()
-    else:
-        resolved_project = _detect_project_id()
-
+    # Resolve project name to ID
     try:
         db_path = _get_db_path()
         conn = sqlite3.connect(db_path)
         _init_db(conn)
         cursor = conn.cursor()
 
-        query = "SELECT id, key, status, title, created_at FROM issues WHERE project = ?"
-        params = [resolved_project]
+        if project_arg and project_arg != "default":
+            cursor.execute("SELECT id FROM projects WHERE name = ?", (project_arg,))
+            row = cursor.fetchone()
+            if not row:
+                conn.close()
+                return _tool_response(request_id, f"Project '{project_arg}' not found.")
+            resolved_project_id = row[0]
+            resolved_project_name = project_arg
+        elif project_arg is None or project_arg == "":
+            resolved_project_id = _detect_project_id()
+            cursor.execute("SELECT name FROM projects WHERE id = ?", (resolved_project_id,))
+            resolved_project_name = cursor.fetchone()[0]
+        else:
+            resolved_project_id = _detect_project_id()
+            cursor.execute("SELECT name FROM projects WHERE id = ?", (resolved_project_id,))
+            resolved_project_name = cursor.fetchone()[0]
+
+        query = "SELECT p.name as project, i.key, i.status, i.title, i.created_at FROM issues i JOIN projects p ON i.project_id = p.id WHERE i.project_id = ?"
+        params = [resolved_project_id]
 
         if status_filter:
-            query += " AND status = ?"
+            query += " AND i.status = ?"
             params.append(status_filter)
 
-        query += " ORDER BY created_at DESC"
+        query += " ORDER BY i.created_at DESC"
 
         cursor.execute(query, params)
         rows = cursor.fetchall()
         conn.close()
 
         if not rows:
-            return _tool_response(request_id, f"No issues found for project '{resolved_project}'.")
+            return _tool_response(request_id, f"No issues found for project '{resolved_project_name}'.")
 
         formatted = "\n".join([
             f"- [{row[2]}] {row[1]} — {row[3]} (created: {row[4]})"
             for row in rows
         ])
 
-        return _tool_response(request_id, f"Issues for '{resolved_project}' ({len(rows)}):\n{formatted}")
+        return _tool_response(request_id, f"Issues for '{resolved_project_name}' ({len(rows)}):\n{formatted}")
 
     except Exception as e:
         if logger:
@@ -1093,18 +1375,12 @@ async def handle_list_issues(request_id: str, args: dict, _tool_response, logger
 
 async def handle_update_issue_project(request_id: str, args: dict, _tool_response, logger=None, **kwargs) -> dict:
     """Change the project ownership of an existing issue."""
-    old_project = args.get("project", None)
-    new_project = args.get("new_project", "")
+    old_project_name = args.get("project", None)
+    new_project_name = args.get("new_project", "")
     key = args.get("key", "")
 
-    if not key or not new_project:
+    if not key or not new_project_name:
         return _tool_response(request_id, "Error: 'key' and 'new_project' are required.")
-
-    # Resolve old project ID
-    if old_project and old_project != "default":
-        resolved_old_project = old_project
-    else:
-        resolved_old_project = _detect_project_id()
 
     try:
         db_path = _get_db_path()
@@ -1112,28 +1388,49 @@ async def handle_update_issue_project(request_id: str, args: dict, _tool_respons
         _init_db(conn)
         cursor = conn.cursor()
 
+        # Resolve old project ID
+        if old_project_name and old_project_name != "default":
+            cursor.execute("SELECT id FROM projects WHERE name = ?", (old_project_name,))
+            row = cursor.fetchone()
+            if not row:
+                conn.close()
+                return _tool_response(request_id, f"Project '{old_project_name}' not found.")
+            resolved_old_project_id = row[0]
+        else:
+            resolved_old_project_id = _detect_project_id()
+            cursor.execute("SELECT name FROM projects WHERE id = ?", (resolved_old_project_id,))
+            old_project_name = cursor.fetchone()[0]
+
+        # Resolve new project ID
+        cursor.execute("SELECT id FROM projects WHERE name = ?", (new_project_name,))
+        row = cursor.fetchone()
+        if not row:
+            conn.close()
+            return _tool_response(request_id, f"Project '{new_project_name}' not found.")
+        new_project_id = row[0]
+
         # Find the issue
         cursor.execute(
-            "SELECT id FROM issues WHERE project = ? AND key = ?",
-            (resolved_old_project, key)
+            "SELECT id FROM issues WHERE project_id = ? AND key = ?",
+            (resolved_old_project_id, key)
         )
         row = cursor.fetchone()
 
         if not row:
             conn.close()
-            return _tool_response(request_id, f"Issue '{key}' not found in project '{resolved_old_project}'.")
+            return _tool_response(request_id, f"Issue '{key}' not found in project '{old_project_name}'.")
 
         issue_id = row[0]
 
         # Update the project
         cursor.execute(
-            "UPDATE issues SET project = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-            (new_project, issue_id)
+            "UPDATE issues SET project_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (new_project_id, issue_id)
         )
         conn.commit()
         conn.close()
 
-        return _tool_response(request_id, f"Issue '{key}' moved from '{resolved_old_project}' → '{new_project}'.")
+        return _tool_response(request_id, f"Issue '{key}' moved from '{old_project_name}' → '{new_project_name}'.")
 
     except Exception as e:
         if logger:
