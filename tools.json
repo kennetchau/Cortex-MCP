@@ -406,18 +406,18 @@
         }
     },
     {
-        "name": "add_context_alias",
-        "description": "Add an alternate name (alias) for an existing context entry. The alias can be used in place of the canonical key in store/query/clear operations.",
+        "name": "add_project_alias",
+        "description": "Add an alternate name (alias) for an existing project. The alias can be used in place of the canonical project name.",
         "inputSchema": {
             "type": "object",
             "properties": {
-                "context_key": {
-                    "type": "string",
-                    "description": "The canonical key of the context entry to alias"
-                },
                 "alias_name": {
                     "type": "string",
                     "description": "The alternate name to register as an alias"
+                },
+                "canonical_name": {
+                    "type": "string",
+                    "description": "The canonical project name that this alias maps to"
                 },
                 "project": {
                     "type": "string",
@@ -426,8 +426,8 @@
                 }
             },
             "required": [
-                "context_key",
-                "alias_name"
+                "alias_name",
+                "canonical_name"
             ]
         }
     },
