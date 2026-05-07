@@ -335,13 +335,11 @@ def _init_db(conn: sqlite3.Connection, base_dir: Path):
     for sql in CREATE_TABLES.values():
         cursor.execute(sql)
 
-    # Create FTS tables (drop and recreate to ensure clean state after migration)
+    # Create FTS tables if they don't exist yet (preserve data across calls)
     for table_name, sql in CREATE_FTS.items():
-        try:
-            cursor.execute(f"DROP TABLE IF EXISTS {table_name}")
-        except Exception:
-            pass
-        cursor.execute(sql)
+        cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
+        if not cursor.fetchone():
+            cursor.execute(sql)
 
     # Recreate triggers
     for name, sql in CREATE_TRIGGERS.items():
@@ -387,10 +385,11 @@ def _detect_project_name(base_dir: Path) -> str:
 
 
 def _resolve_project_id(conn: sqlite3.Connection, project_name: Optional[str],
-                        detect_default: bool = True) -> Tuple[Optional[int], Optional[str]]:
+                        detect_default: bool = True, base_dir: Path = None) -> Tuple[Optional[int], Optional[str]]:
     """Resolve project name to (id, name). Returns (None, None) for cross-project queries.
 
     Also checks project_aliases table for alternate names.
+    Auto-creates projects that don't exist (except for explicit "default" which is special).
     """
     cursor = conn.cursor()
 
@@ -420,9 +419,15 @@ def _resolve_project_id(conn: sqlite3.Connection, project_name: Optional[str],
         row = cursor.fetchone()
         if row:
             return row[0], project_name
-        return None, project_name  # Project doesn't exist yet
+        # Auto-create the project if it doesn't exist
+        try:
+            cursor.execute("INSERT INTO projects (name) VALUES (?)", (project_name,))
+            return cursor.lastrowid, project_name
+        except sqlite3.IntegrityError:
+            cursor.execute("SELECT id FROM projects WHERE name = ?", (project_name,))
+            return cursor.fetchone()[0], project_name
 
-    # Auto-detect
+    # Auto-detect (for default/None cases)
     detected = _detect_project_name(base_dir)
     cursor.execute("SELECT id FROM projects WHERE name = ?", (detected,))
     row = cursor.fetchone()
@@ -484,7 +489,7 @@ async def handle_store_context(request_id: str, args: dict, _tool_response, logg
             _init_db(conn, BASE_DIR)
             cursor = conn.cursor()
 
-            project_id, resolved_name = _resolve_project_id(conn, project_name)
+            project_id, resolved_name = _resolve_project_id(conn, project_name, base_dir=BASE_DIR)
             if project_id is None:
                 return _tool_response(request_id, f"Project '{project_name}' not found.")
 
@@ -543,7 +548,7 @@ async def handle_query_context(request_id: str, args: dict, _tool_response, logg
             _init_db(conn, BASE_DIR)
             cursor = conn.cursor()
 
-            project_id, resolved_name = _resolve_project_id(conn, project_arg, detect_default=False)
+            project_id, resolved_name = _resolve_project_id(conn, project_arg, detect_default=False, base_dir=BASE_DIR)
             cross_project = project_id is None
 
             results = []
@@ -652,7 +657,7 @@ async def handle_clear_context(request_id: str, args: dict, _tool_response, logg
             _init_db(conn, BASE_DIR)
             cursor = conn.cursor()
 
-            project_id, resolved_name = _resolve_project_id(conn, project_arg)
+            project_id, resolved_name = _resolve_project_id(conn, project_arg, base_dir=BASE_DIR)
             if project_id is None and project_arg:
                 return _tool_response(request_id, f"Project '{project_arg}' not found.")
 
@@ -716,14 +721,14 @@ async def handle_list_projects(request_id: str, args: dict, _tool_response, logg
         return _tool_response(request_id, f"Error listing projects: {str(e)}")
 
 
-async def handle_add_context_alias(request_id: str, args: dict, _tool_response, logger=None, **kwargs) -> dict:
-    """Add an alternate name (alias) for an existing context entry."""
-    context_key = args.get("context_key", "")
+async def handle_add_project_alias(request_id: str, args: dict, _tool_response, logger=None, **kwargs) -> dict:
+    """Add an alternate name (alias) for an existing project. The alias can be used in place of the canonical project name."""
     alias_name = args.get("alias_name", "")
+    canonical_name = args.get("canonical_name", "")
     project = args.get("project", None)
 
-    if not context_key or not alias_name:
-        return _tool_response(request_id, "Error: 'context_key' and 'alias_name' are required.")
+    if not alias_name or not canonical_name:
+        return _tool_response(request_id, "Error: 'alias_name' and 'canonical_name' are required.")
 
     try:
         from config import BASE_DIR
@@ -733,39 +738,31 @@ async def handle_add_context_alias(request_id: str, args: dict, _tool_response, 
             _init_db(conn, BASE_DIR)
             cursor = conn.cursor()
 
-            project_id, resolved_name = _resolve_project_id(conn, project)
-            if project_id is None and project:
-                return _tool_response(request_id, f"Project '{project}' not found.")
+            # Resolve the canonical project to get its ID
+            canonical_id, resolved_canonical = _resolve_project_id(conn, canonical_name, base_dir=BASE_DIR)
+            if canonical_id is None:
+                return _tool_response(request_id, f"Canonical project '{canonical_name}' not found.")
 
+            # Check if this alias already exists
             cursor.execute(
-                "SELECT id FROM context WHERE key = ? AND project_id = ?",
-                (context_key, project_id)
-            )
-            if not cursor.fetchone():
-                return _tool_response(request_id, f"Context key '{context_key}' not found for project '{resolved_name}'.")
-
-            cursor.execute(
-                "SELECT id FROM context_aliases WHERE alias_key = ? AND project_id = ?",
-                (alias_name, project_id)
+                "SELECT id FROM project_aliases WHERE alias_key = ? AND project_id = ?",
+                (alias_name, canonical_id)
             )
             if cursor.fetchone():
-                return _tool_response(request_id, f"Alias '{alias_name}' already exists for project '{resolved_name}'.")
+                return _tool_response(request_id, f"Alias '{alias_name}' already exists for project '{resolved_canonical}'.")
 
-            # Find the actual context_id
-            cursor.execute("SELECT id FROM context WHERE key = ? AND project_id = ?", (context_key, project_id))
-            context_id = cursor.fetchone()[0]
-
+            # Store alias: alias_key → canonical_key
             cursor.execute(
-                "INSERT INTO context_aliases (context_id, alias_key, project_id) VALUES (?, ?, ?)",
-                (context_id, alias_name, project_id)
+                "INSERT INTO project_aliases (project_id, alias_key, canonical_key) VALUES (?, ?, ?)",
+                (canonical_id, alias_name, canonical_name)
             )
             conn.commit()
 
-        return _tool_response(request_id, f"Added alias '{alias_name}' → '{context_key}' for project '{resolved_name}'.")
+        return _tool_response(request_id, f"Added alias '{alias_name}' → '{canonical_name}'.")
 
     except Exception as e:
         if logger:
-            logger.error(f"add_context_alias failed: {e}")
+            logger.error(f"add_project_alias failed: {e}")
         return _tool_response(request_id, f"Error adding alias: {str(e)}")
 
 
@@ -1074,7 +1071,7 @@ async def handle_store_issue(request_id: str, args: dict, _tool_response, logger
             _init_db(conn, BASE_DIR)
             cursor = conn.cursor()
 
-            project_id, resolved_name = _resolve_project_id(conn, project_name)
+            project_id, resolved_name = _resolve_project_id(conn, project_name, base_dir=BASE_DIR)
             if project_id is None and project_name:
                 return _tool_response(request_id, f"Project '{project_name}' not found.")
 
@@ -1122,7 +1119,7 @@ async def handle_query_issues(request_id: str, args: dict, _tool_response, logge
             _init_db(conn, BASE_DIR)
             cursor = conn.cursor()
 
-            project_id, resolved_name = _resolve_project_id(conn, project_arg, detect_default=False)
+            project_id, resolved_name = _resolve_project_id(conn, project_arg, detect_default=False, base_dir=BASE_DIR)
 
             query = """
                 SELECT p.name as project, i.key, i.status, i.title, i.description,
@@ -1252,7 +1249,7 @@ async def handle_update_issue_status(request_id: str, args: dict, _tool_response
             _init_db(conn, BASE_DIR)
             cursor = conn.cursor()
 
-            project_id, resolved_name = _resolve_project_id(conn, project_name)
+            project_id, resolved_name = _resolve_project_id(conn, project_name, base_dir=BASE_DIR)
             if project_id is None and project_name:
                 return _tool_response(request_id, f"Project '{project_name}' not found.")
 
@@ -1295,7 +1292,7 @@ async def handle_list_issues(request_id: str, args: dict, _tool_response, logger
             _init_db(conn, BASE_DIR)
             cursor = conn.cursor()
 
-            project_id, resolved_name = _resolve_project_id(conn, project_arg)
+            project_id, resolved_name = _resolve_project_id(conn, project_arg, base_dir=BASE_DIR)
             if project_id is None:
                 return _tool_response(request_id, f"No issues found for project '{resolved_name}'.")
 
