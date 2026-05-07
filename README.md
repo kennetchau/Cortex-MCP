@@ -1,4 +1,4 @@
-# Cortex-MCP
+# Handyman-MCP
 
 A high-performance Model Context Protocol (MCP) engineered to transform LLMs into autonomous agents with persistent memory and secure system access. Cortex-MCP provides the "executive function" layer for AI models, combining a sophisticated SQLite-backed long-term memory with a hardened execution sandbox.
 
