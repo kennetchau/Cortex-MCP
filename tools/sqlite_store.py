@@ -840,9 +840,13 @@ async def handle_add_project_change(request_id: str, args: dict, _tool_response,
             conn.close()
             return _tool_response(request_id, f"Change '{key}' already exists for project '{project_name}'.")
         
+        # Get next available ID (handles tables without AUTOINCREMENT)
+        cursor.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM project_changes WHERE project_id = ?", (project_id,))
+        new_id = cursor.fetchone()[0]
+        
         cursor.execute(
-            "INSERT INTO project_changes (project_id, key, change_type, summary) VALUES (?, ?, ?, ?)",
-            (project_id, key, change_type, summary)
+            "INSERT INTO project_changes (id, project_id, key, change_type, summary) VALUES (?, ?, ?, ?, ?)",
+            (new_id, project_id, key, change_type, summary)
         )
         conn.commit()
         conn.close()
@@ -892,6 +896,12 @@ async def handle_add_change_step(request_id: str, args: dict, _tool_response, lo
             return _tool_response(request_id, f"Change '{change_key}' not found for project '{project}'.")
         
         change_id = row[0]
+        # Handle NULL id (table without AUTOINCREMENT) — assign next available
+        if change_id is None:
+            cursor.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM project_changes WHERE project_id = ?", (project_id,))
+            change_id = cursor.fetchone()[0]
+            cursor.execute("UPDATE project_changes SET id = ? WHERE key = ? AND id IS NULL", (change_id, change_key))
+            conn.commit()
         
         cursor.execute(
             "INSERT INTO project_change_details (change_id, step, date, details, files_changed) VALUES (?, ?, ?, ?, ?)",
