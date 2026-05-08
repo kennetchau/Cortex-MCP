@@ -34,7 +34,7 @@ A high-performance Model Context Protocol (MCP) engineered to transform LLMs int
 | `store_context` | Store project-specific context in SQLite knowledge base |
 | `query_context` | Query stored context — supports keyword search (FTS5), direct key lookup, or lists all keys |
 | `clear_context` | Clear stored context entries by key or wipe all entries for a project |
-| `add_context_alias` | Register an alternate name (alias) for an existing context entry |
+| `add_project_alias` | Register an alternate name (alias) for a project identifier |
 | `list_projects` | List all known projects with last update timestamps |
 | `add_project_change` | Record a new change entry (bugfix, refactor, feature, milestone, config, other) |
 | `add_change_step` | Add a timeline step to an existing project change |
@@ -131,11 +131,11 @@ mcp_copy/
 ### Key Design Decisions
 
 - **Single MCP endpoint** at `POST /mcp` handling `initialize`, `tools/list`, and `tools/call` methods
-- **Decorator-based tool registration** — new handlers are auto-discovered via decorators; no manual sync across files needed
+- **Manual tool registration** — each handler must be imported in main.py, exported in __init__.py, and defined in tools.json (31 entries to keep in sync)
 - **tools.json as schema source** — clients discover available tools from this file
 - **Bubblewrap isolation** for `run_command` — read-only root filesystem, disposable `/tmp`, writable BASE_DIR bind mount
 - **Relational SQLite store** — proper foreign keys (projects table → context/issues/project_changes), FTS5 indexes rebuilt without content= param, backward-compat views for legacy queries
-- **Auto-linking triggers** — issue_change_links junction table populated automatically when projects match
+- **Issue-change linking** — junction table exists but currently requires manual population (known issue: `junction-table-empty`)
 - **Project auto-detection** — pyproject.toml → git remote → directory name fallback chain
 
 ## Persistent Context Store
@@ -161,7 +161,7 @@ Detection priority:
 {"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"query_context","arguments":{"key":"auth-flow","project":"my-app"}}}
 
 // Add an alias — now "login" resolves to the same entry
-{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"add_context_alias","arguments":{"context_key":"auth-flow","alias_name":"login","project":"my-app"}}}
+{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"add_project_alias","arguments":{"context_key":"auth-flow","alias_name":"login","project":"my-app"}}}
 
 // Query by alias — returns the same entry, shows "Matched via: alias 'login'"
 {"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"query_context","arguments":{"key":"login","project":"my-app"}}}
@@ -173,7 +173,7 @@ A structured changelog system for tracking work progress, bugs fixed, refactors 
 
 ### Auto-Linking with Issues
 
-When an issue is created or updated and a project change shares the same project name, the `issue_change_links` junction table is automatically populated via a database trigger — no manual linking needed.
+The `issue_change_links` junction table exists but currently requires manual population. A database trigger mechanism is planned but not yet implemented.
 
 ### Recording a Change
 
@@ -219,7 +219,7 @@ A structured system for tracking bugs and observations with lifecycle status. Is
 | `get_issue_details` | Get full details for a single issue including complete description and commit link |
 | `list_issues` | List all issues for a project with optional status filter |
 
-Status values: `open`, `closed`, `not-relevant`. The `issue_change_links` junction table tracks which project changes relate to which issues (many-to-many), auto-populated via trigger when projects match.
+Status values: `open`, `closed`, `not-relevant`. The `issue_change_links` junction table tracks which project changes relate to which issues (many-to-many). Currently not auto-populated — a known issue tracked as `junction-table-empty`.
 
 ## Todo Project Pattern
 
@@ -239,7 +239,7 @@ The `run_command` tool uses Bubblewrap for isolation:
 
 - **Read-only root filesystem** (`--ro-bind / /`)
 - **Disposable temp directory** (`--tmpfs /tmp`)
-- **Writable resources directory** (`--bind resources resources`)
+- **Writable BASE_DIR mount** (`--bind <BASE_DIR> <BASE_DIR>`)
 - **DNS resolution enabled** (no `/etc` restriction)
 
 ### Environment Variables Passed to Sandbox
