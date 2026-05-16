@@ -807,6 +807,17 @@ async def handle_add_project_change(request_id: str, args: dict, _tool_response,
                 "INSERT INTO project_changes (project_id, key, change_type, summary) VALUES (?, ?, ?, ?)",
                 (project_id, key, change_type, summary)
             )
+            # Auto-link to matching issue if one exists
+            cursor.execute(
+                "SELECT id FROM issues WHERE project_id = ? AND key = ?",
+                (project_id, key)
+            )
+            issue_row = cursor.fetchone()
+            if issue_row:
+                cursor.execute(
+                    "INSERT OR IGNORE INTO issue_change_links (issue_id, change_id) VALUES (?, ?)",
+                    (issue_row[0], cursor.lastrowid)
+                )
             conn.commit()
 
         return _tool_response(request_id, f"Added change '{key}' to project '{project_name}' ({change_type}).")
@@ -1094,6 +1105,17 @@ async def handle_store_issue(request_id: str, args: dict, _tool_response, logger
                     VALUES (?, ?, ?, ?, ?, ?)
                 """, (project_id, key, status, title, description, fixed_in_commit))
                 action = "Stored"
+                # Auto-link to matching project change if one exists
+                cursor.execute(
+                    "SELECT id FROM project_changes WHERE project_id = ? AND key = ?",
+                    (project_id, key)
+                )
+                change_row = cursor.fetchone()
+                if change_row:
+                    cursor.execute(
+                        "INSERT OR IGNORE INTO issue_change_links (issue_id, change_id) VALUES (?, ?)",
+                        (cursor.lastrowid, change_row[0])
+                    )
 
             conn.commit()
 

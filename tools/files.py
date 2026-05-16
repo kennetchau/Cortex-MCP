@@ -12,10 +12,15 @@ from config import BASE_DIR
 
 
 # Directories/files to skip when building tree view
-_SKIP_DIRS = {"__pycache__", ".git", ".idea", ".vscode", ".mypy_cache", ".pytest_cache", "node_modules", ".venv", "venv"}
+_SKIP_DIRS = {
+    "__pycache__", ".git", ".idea", ".vscode", ".mypy_cache", ".pytest_cache",
+    "node_modules", ".npm-cache", ".venv", "venv", ".yarn", ".yarn-cache",
+    ".DS_Store", "*.egg-info",
+}
 
 
-def _build_tree(root: pathlib.Path, prefix: str = "", is_last: bool = True, is_root: bool = False) -> str:
+def _build_tree(root: pathlib.Path, prefix: str = "", is_last: bool = True, is_root: bool = False,
+                depth: int = 0, max_depth: int = 3, max_entries: int = 50) -> str:
     """Recursively build a tree-style string representation of a directory.
     
     Args:
@@ -23,6 +28,9 @@ def _build_tree(root: pathlib.Path, prefix: str = "", is_last: bool = True, is_r
         prefix: Leading indentation prefix for this level
         is_last: Whether this is the last item at its level
         is_root: Whether this is the top-level call
+        depth: Current recursion depth (starts at 0)
+        max_depth: Maximum depth to recurse. Set to 999 for unlimited.
+        max_entries: Max entries to show per directory. Excess shows as count.
         
     Returns:
         Formatted tree string
@@ -48,11 +56,30 @@ def _build_tree(root: pathlib.Path, prefix: str = "", is_last: bool = True, is_r
             # Filter out skipped directories
             children = [c for c in children if c.name not in _SKIP_DIRS]
             
+            total = len(children)
+            show_all = (total <= max_entries)
+            display_count = total if show_all else max_entries
+            
             for i, child in enumerate(children):
                 is_last_child = (i == len(children) - 1)
-                subtree = _build_tree(child, child_prefix, is_last_child)
-                if subtree:
-                    lines.append(subtree)
+                
+                # Truncate: only recurse into first N entries
+                if not show_all and i >= max_entries:
+                    remaining = total - max_entries
+                    connector = "└── " if is_last else "├── "
+                    lines.append(f"{prefix}{connector}... ({remaining} more)")
+                    break
+                
+                # Depth limit: stop recursing past max_depth
+                if depth + 1 >= max_depth and max_depth < 999:
+                    connector = "└── " if is_last else "├── "
+                    icon = "📁 " if child.is_dir() else "📄 "
+                    lines.append(f"{prefix}{connector}{icon}{child.name} (truncated — depth limit)")
+                else:
+                    subtree = _build_tree(child, child_prefix, is_last_child, depth=depth + 1,
+                                          max_depth=max_depth, max_entries=max_entries)
+                    if subtree:
+                        lines.append(subtree)
         except PermissionError:
             lines.append(f"{child_prefix}└── 🔒 (permission denied)")
     
@@ -81,10 +108,12 @@ async def handle_list_files(request_id: str, args: dict, _tool_response, **kwarg
         return _tool_response(request_id, f"Error: Path '{target}' does not exist.")
 
     recursive = args.get("recursive", False)
+    max_depth = args.get("max_depth", 3)
+    max_entries = args.get("max_entries", 50)
 
     if recursive:
-        # Build tree view
-        result = _build_tree(target, is_root=True)
+        # Build tree view (partial or full depending on params)
+        result = _build_tree(target, is_root=True, depth=0, max_depth=max_depth, max_entries=max_entries)
         return _tool_response(request_id, result)
     else:
         # Flat listing (original behavior)

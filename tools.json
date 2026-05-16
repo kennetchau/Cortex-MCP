@@ -60,7 +60,7 @@
     },
     {
         "name": "list_files",
-        "description": "List files and directories in a specified folder. Use recursive=true for a full tree view of the directory structure.",
+        "description": "List files and directories in a specified folder. Three modes: flat (recursive=false, current dir only), partial (recursive=true with depth/entry limits), or full (recursive=true + max_depth=999 for unlimited).",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -71,7 +71,17 @@
                 "recursive": {
                     "type": "boolean",
                     "default": false,
-                    "description": "If true, show a recursive tree view of all subdirectories"
+                    "description": "If true, show a recursive tree view. Use with max_depth/max_entries for partial listing."
+                },
+                "max_depth": {
+                    "type": "integer",
+                    "default": 3,
+                    "description": "Max recursion depth when recursive=true. Set to 999 for unlimited (full dump)."
+                },
+                "max_entries": {
+                    "type": "integer",
+                    "default": 50,
+                    "description": "Max entries per directory. Excess dirs/files show as '... (N more)' instead."
                 }
             },
             "required": [
